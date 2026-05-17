@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MPRO Auditor Accounting</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main id="entry-screen" class="entry-screen">
+      <section class="entry-visual" aria-label="MPRO intelligence illustration">
+        <div class="visual-symbol">₹</div>
+      </section>
+      <section class="entry-content">
+        <div class="powered">Powered by <strong>MPRO</strong></div>
+        <div class="shield-mark">MPRO</div>
+        <p class="welcome">Welcome to</p>
+        <h1>MPRO Invoice Intelligence</h1>
+        <p class="subtitle">AI enabled Document Intelligence Framework</p>
+        <p class="promise">Detect faster. Prevent earlier. Protect stronger.</p>
+        <button id="launch-button" class="danger-action" type="button">Launch</button>
+      </section>
+    </main>
+
+    <section id="role-screen" class="modal-stage hidden" aria-label="Select role">
+      <div class="screen-blur"></div>
+      <div class="role-card panel">
+        <button id="close-role" class="close-button" type="button" title="Close">x</button>
+        <h2>Select Your Role</h2>
+        <p>Choose your access level to continue</p>
+        <div class="role-list">
+          <button class="role-option disabled-role" type="button" data-role="advertiser">
+            <span class="role-icon purple">A</span>
+            <span><strong>Advertiser Login</strong><small>Media Manager</small></span>
+            <em>Coming next</em>
+          </button>
+          <button class="role-option disabled-role" type="button" data-role="agency">
+            <span class="role-icon blue">G</span>
+            <span><strong>Agency Login</strong><small>Campaign Manager</small></span>
+            <em>Coming next</em>
+          </button>
+          <button class="role-option disabled-role" type="button" data-role="finance">
+            <span class="role-icon red">F</span>
+            <span><strong>Finance Login</strong><small>Invoice Processing</small></span>
+            <em>Coming next</em>
+          </button>
+          <button id="auditor-role" class="role-option" type="button" data-role="auditor">
+            <span class="role-icon teal">U</span>
+            <span><strong>Auditor Login</strong><small>Invoice Reconciliation</small></span>
+            <b>-></b>
+          </button>
+        </div>
+        <footer>Need help? <strong>Contact Support</strong></footer>
+      </div>
+    </section>
+
+    <section id="login-screen" class="modal-stage hidden" aria-label="Auditor login">
+      <div class="screen-blur"></div>
+      <form id="login-form" class="login-card panel">
+        <div class="login-head">
+          <button id="back-to-roles" class="back-button" type="button" title="Back">&lt;</button>
+          <button id="close-login" class="close-button light" type="button" title="Close">x</button>
+          <div class="login-icon">U</div>
+          <h2>Auditor Login</h2>
+          <p>Invoice Reconciliation</p>
+        </div>
+        <div class="login-body">
+          <label>
+            Username
+            <input id="username" type="text" autocomplete="username" value="auditor@mpro.com" required />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" autocomplete="current-password" value="Auditor@2026" required />
+          </label>
+          <div class="login-row">
+            <label class="remember"><input id="remember-me" type="checkbox" /> Remember me</label>
+            <button class="link-button" type="button">Forgot password?</button>
+          </div>
+          <p id="auth-error" class="form-error" role="alert"></p>
+          <button class="danger-action full" type="submit">Sign In</button>
+          <p class="support">Need help? <strong>Contact IT Support</strong></p>
+        </div>
+      </form>
+    </section>
+
+    <div id="app-shell" class="app-shell hidden">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <strong>MPRO</strong>
+          <span id="active-module-label">Accounting</span>
+        </div>
+        <nav class="main-nav" aria-label="Main navigation">
+          <button class="nav-item" data-module="dashboard">Dashboard</button>
+          <button class="nav-item" data-module="campaigns">Campaigns</button>
+          <button class="nav-item" data-module="planning">Planning</button>
+          <button class="nav-item" data-module="monitoring">Monitoring</button>
+          <button class="nav-item active" data-module="accounting">Accounting</button>
+          <button class="nav-item" data-module="report">Report</button>
+          <button class="nav-item" data-module="performance">Performance</button>
+        </nav>
+        <div class="user-tools">
+          <span id="signed-in-user"></span>
+          <button id="signout-button" class="ghost-action" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <section class="global-filterbar" aria-label="Global filters">
+        <label>Campaign<select data-global-filter="campaign"></select></label>
+        <label>Agency<select data-global-filter="agency"></select></label>
+        <label>Medium<select data-global-filter="medium"></select></label>
+        <label>Platform<select data-global-filter="platform"></select></label>
+        <label>Region<select data-global-filter="region"></select></label>
+        <label>Goal<select data-global-filter="goal"></select></label>
+        <button id="reset-global-filters" class="ghost-action" type="button">Reset</button>
+      </section>
+
+      <main class="workspace">
+        <section id="module-placeholder" class="module-placeholder hidden"></section>
+        <section id="accounting-module" class="accounting-module">
+          <aside id="accounting-filters" class="side-filters">
+            <div class="side-filter-head">
+              <h2>Accounting Filters</h2>
+              <button id="collapse-filters" class="icon-button" type="button" title="Collapse filters">&lt;</button>
+            </div>
+            <p class="filter-note">Filters current Excel data ke basis par auto banenge.</p>
+            <form id="accounting-filter-form" class="filter-form"></form>
+            <button id="clear-accounting-filters" class="ghost-action full" type="button">Clear Filters</button>
+          </aside>
+
+          <button id="expand-filters" class="filter-rail hidden" type="button">Filters</button>
+
+          <section class="table-zone">
+            <div id="campaign-choice" class="campaign-choice">
+              <button id="new-campaign-button" class="choice-button" type="button">
+                <span>New Campaign</span>
+                <small>Upload Excel or CSV</small>
+              </button>
+              <button id="existing-campaign-button" class="choice-button" type="button">
+                <span>Existing Campaign</span>
+                <small>Continue saved work</small>
+              </button>
+            </div>
+
+            <div id="campaign-panel" class="campaign-panel hidden">
+              <div class="campaign-toolbar">
+                <div class="campaign-title-block">
+                  <label>Campaign name<input id="campaign-name" type="text" placeholder="Auditor invoice review" /></label>
+                  <label>Excel / CSV file<input id="file-input" type="file" accept=".xlsx,.xls,.csv,.tsv" /></label>
+                </div>
+                <div class="toolbar-actions">
+                  <button id="load-sample" class="ghost-action" type="button">Sample</button>
+                  <button id="add-row" class="ghost-action" type="button">Add row</button>
+                  <button id="export-csv" class="ghost-action" type="button">Export CSV</button>
+                  <button id="save-campaign" class="danger-action compact" type="button">Save</button>
+                </div>
+              </div>
+              <div id="existing-list" class="existing-list hidden"></div>
+              <div class="table-meta">
+                <span id="record-count">0 records</span>
+                <span id="save-status">Not saved</span>
+              </div>
+              <div class="grid-wrap">
+                <table id="invoice-grid" class="invoice-grid" aria-label="Invoice accounting sheet"></table>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+  </body>
+</html>
