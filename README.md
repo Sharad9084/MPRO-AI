@@ -15,7 +15,9 @@ New accounts can be created from the sign-in screen when the backend API is runn
 
 If the frontend is deployed without a reachable backend API, the demo auditor account signs in locally and saved cases stay in browser storage. Users can also create browser-local accounts on static deployments.
 
-On Vercel, this repository works as a static frontend. Vercel will not automatically run `backend/server.py` as a persistent Python database API. For shared cloud cases, deploy the backend separately and configure `window.TAG_MPRO_API_BASE` or localStorage key `mpro.apiBase`.
+On Vercel, this repository now includes Python Functions under `api/` for shared backend access. Vercel will not run `backend/server.py` as a persistent Python server; instead `/api/*` routes call the PostgreSQL backend logic per request.
+
+For shared cloud cases, add a hosted PostgreSQL connection string as the Vercel `DATABASE_URL` environment variable, then redeploy.
 
 ## SQL Mode
 
@@ -55,6 +57,16 @@ http://127.0.0.1:8787
 ```
 
 So after `server_postgres.py` is running, open `index.html` exactly like before.
+
+## Vercel Backend Mode
+
+Deploy this repository to Vercel and set:
+
+```text
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
+```
+
+The frontend will call same-domain API routes such as `/api/auth/signin` and `/api/cases`. If `DATABASE_URL` is not set, the app falls back to browser-local accounts and browser storage.
 
 ## Current Flow
 

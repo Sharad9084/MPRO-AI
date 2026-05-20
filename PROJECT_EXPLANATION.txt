@@ -28,12 +28,14 @@ If a backend API is configured and reachable, sign in uses the backend session t
 If the deployed/static frontend cannot reach a backend API, the demo auditor account can sign in locally and saved cases stay in browser localStorage.
 Users can also create browser-local accounts on static deployments. Local account passwords are stored as PBKDF2-SHA256 hashes using the browser Web Crypto API.
 This avoids showing a local server-start requirement to deployed users.
-Vercel can host this frontend as a static site, but it will not run backend/server.py as a continuously running Python server. Database-backed multi-user storage still requires deploying the backend separately.
+Vercel can host the frontend and the shared backend together by using Python Functions under the api/ folder.
+Vercel will not run backend/server.py as a continuously running Python server; instead the deployed API routes call the PostgreSQL backend logic per request.
+Database-backed multi-user storage requires a hosted PostgreSQL DATABASE_URL in the Vercel project environment variables.
 
 API configuration:
 The frontend checks window.TAG_MPRO_API_BASE or localStorage key mpro.apiBase first.
 For localhost or direct file usage, it defaults to http://127.0.0.1:8787.
-For deployed domains, no local API is assumed unless an API base URL is configured.
+For deployed domains, it defaults to the same-domain /api Vercel Functions.
 
 Security:
 Backend accounts are created through the API when the API is running.
@@ -135,9 +137,17 @@ If no backend API is configured or reachable, Save stores cases in browser local
 
 Cloud status:
 This project is not saving to a cloud database by default.
-Static deployment saves locally in the user's browser unless a reachable backend API URL is configured.
-Cloud database storage requires deploying the backend and configuring TAG_MPRO_API_BASE or localStorage mpro.apiBase to point at that backend.
-Browser-local accounts and cases are device/browser-specific. Sharing one Vercel link does not automatically share a database between users unless the backend is deployed and configured.
+Vercel deployment saves to PostgreSQL when DATABASE_URL is configured and the deployed /api functions are healthy.
+If DATABASE_URL is missing or unreachable, the frontend falls back to browser-local accounts and browser localStorage cases.
+Browser-local accounts and cases are device/browser-specific. Sharing one Vercel link only shares a database between users when the Vercel project has a working hosted PostgreSQL DATABASE_URL.
+
+Vercel backend routes:
+- GET /api/health
+- POST /api/auth/signup
+- POST /api/auth/signin
+- POST /api/auth/signout
+- GET /api/cases
+- POST /api/cases
 
 PostgreSQL mode:
 Run PostgreSQL, create the database mpro_reconciliation, set DATABASE_URL, then run:

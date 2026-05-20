@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 
 const LOCAL_API_BASE = "http://127.0.0.1:8787";
 const configuredApiBase = window.TAG_MPRO_API_BASE || localStorage.getItem("mpro.apiBase") || "";
-const API_BASE = configuredApiBase || (["", "localhost", "127.0.0.1"].includes(window.location.hostname) ? LOCAL_API_BASE : "");
+const API_BASE = configuredApiBase || (["", "localhost", "127.0.0.1"].includes(window.location.hostname) ? LOCAL_API_BASE : "/api");
 let apiOnline = false;
 
 const USERS = [
