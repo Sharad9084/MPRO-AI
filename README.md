@@ -4,7 +4,7 @@ Working local MVP for marketing performance reconciliation and optimisation.
 
 ## Open
 
-Open `index.html` in a browser.
+Open `index.html` in a browser or deploy the folder as a static frontend.
 
 Auditor login:
 
@@ -12,6 +12,8 @@ Auditor login:
 - Password: `Auditor@2026`
 
 New accounts can be created from the sign-in screen when the backend API is running. Passwords are hashed by the backend and API case access requires a signed-in session.
+
+If the frontend is deployed without a reachable backend API, the demo auditor account signs in locally and saved cases stay in browser storage.
 
 ## SQL Mode
 
@@ -27,7 +29,7 @@ Then open `index.html`. When the API is running, Save writes the reconciliation 
 backend/mpro_reconciliation.db
 ```
 
-If the API is not running, the frontend still works and falls back to browser storage.
+If the API is not running or not configured for a deployed frontend, the app still works with the demo auditor account and falls back to browser storage.
 
 ## PostgreSQL Mode
 
@@ -57,7 +59,13 @@ So after `server_postgres.py` is running, open `index.html` exactly like before.
 - Launch screen
 - Role selection with 4 roles
 - Auditor Login active for now
-- Accounting page with 4 upload boxes:
+- CRM-style Accounting workspace with:
+  - Compact hover/focus global filters
+  - Workspace actions for sample data, export and save
+  - Search and active filter chips
+  - Compact upload cards
+  - Configurable columns and polished table states
+- Accounting page with 5 upload boxes:
   - Media Schedule
   - Agency Invoice
   - 3rd Party Invoice

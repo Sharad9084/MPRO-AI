@@ -6,7 +6,9 @@ const STORAGE_KEYS = {
   globalFilters: "mpro.globalFilters.v3",
 };
 
-const API_BASE = "http://127.0.0.1:8787";
+const LOCAL_API_BASE = "http://127.0.0.1:8787";
+const configuredApiBase = window.TAG_MPRO_API_BASE || localStorage.getItem("mpro.apiBase") || "";
+const API_BASE = configuredApiBase || (["", "localhost", "127.0.0.1"].includes(window.location.hostname) ? LOCAL_API_BASE : "");
 let apiOnline = false;
 
 const USERS = [
@@ -424,6 +426,7 @@ const state = {
   sort: { column: null, direction: "asc" },
   globalFilters: {},
   accountingFilters: {},
+  searchQuery: "",
   dirty: false,
 };
 
@@ -442,8 +445,8 @@ function emptyDatasets() {
 
 async function loadState() {
   const session = readJSON(STORAGE_KEYS.session, null);
-  const apiCases = session && Date.now() <= session.expiresAt ? await loadCasesFromApi(session.token) : null;
-  state.cases = apiCases || [];
+  const apiCases = session && session.token && Date.now() <= session.expiresAt ? await loadCasesFromApi(session.token) : null;
+  state.cases = apiCases || readJSON(STORAGE_KEYS.cases, []);
   state.activeCaseId = session ? localStorage.getItem(STORAGE_KEYS.activeCase) : null;
   state.globalFilters = readJSON(STORAGE_KEYS.globalFilters, {});
   state.accountingFilters = readJSON(STORAGE_KEYS.accountingFilters, {});
@@ -455,7 +458,7 @@ function bindEvents() {
   $("#launch-button").addEventListener("click", showRoleScreen);
   $("#close-role").addEventListener("click", showEntry);
   $("#auditor-role").addEventListener("click", showLogin);
-  $$(".disabled-role").forEach((button) => button.addEventListener("click", () => toast("Abhi Auditor use case active hai. Ye role next phase mein add hoga.")));
+  $$(".disabled-role").forEach((button) => button.addEventListener("click", () => toast("The auditor workflow is active. Additional roles are planned for the next phase.")));
   $("#back-to-roles").addEventListener("click", showRoleScreen);
   $("#close-login").addEventListener("click", showEntry);
   $("#login-form").addEventListener("submit", handleLogin);
@@ -463,7 +466,7 @@ function bindEvents() {
   $("#signout-button").addEventListener("click", signOut);
   $("#brand-dashboard").addEventListener("click", () => switchModule("dashboard"));
   $("#close-help").addEventListener("click", closeUploadHelp);
-  $("#support-help").addEventListener("click", () => toast("Support team ko file format, file size aur upload source ke saath contact karein."));
+  $("#support-help").addEventListener("click", () => toast("Contact support with the file format, file size, and upload source."));
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => switchModule(button.dataset.module)));
   $$("#app-shell [data-global-filter]").forEach((select) => select.addEventListener("change", handleGlobalFilter));
   $$(".source-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
@@ -480,6 +483,11 @@ function bindEvents() {
   $("#export-csv").addEventListener("click", exportCsv);
   $("#save-campaign").addEventListener("click", saveCase);
   $("#clear-accounting-filters").addEventListener("click", clearAccountingFilters);
+  $("#table-search").addEventListener("input", (event) => {
+    state.searchQuery = event.target.value.trim().toLowerCase();
+    renderGrid();
+    renderFilterChips();
+  });
   window.addEventListener("beforeunload", (event) => {
     if (!state.dirty) return;
     event.preventDefault();
@@ -553,17 +561,38 @@ async function handleSignin() {
   const password = $("#password").value;
   const result = await postApi("/api/auth/signin", { username, password });
   if (!result.ok) {
-    $("#auth-error").textContent = result.error || "Sign in failed. Backend server running hai ya nahi check karein.";
+    const localSignin = signInWithLocalAuditor(username, password);
+    if (localSignin) return;
+    $("#auth-error").textContent = result.error || "Sign in failed. Check the configured API connection or use the demo auditor account.";
     return;
   }
   state.currentUser = result.data.user;
   const remember = $("#remember-me").checked;
   const duration = remember ? 30 * 24 * 60 * 60 * 1000 : (result.data.expiresInSeconds || 8 * 60 * 60) * 1000;
   localStorage.setItem(STORAGE_KEYS.session, JSON.stringify({ user: state.currentUser, token: result.data.token, expiresAt: Date.now() + duration }));
-  state.cases = await loadCasesFromApi();
+  state.cases = await loadCasesFromApi() || readJSON(STORAGE_KEYS.cases, []);
   const active = getActiveCase();
   if (active) hydrateCase(active);
   showApp();
+}
+
+function signInWithLocalAuditor(username, password) {
+  const matchedUser = USERS.find((user) => user.username === username && user.password === password);
+  if (!matchedUser) return false;
+  const remember = $("#remember-me").checked;
+  const duration = remember ? 30 * 24 * 60 * 60 * 1000 : 8 * 60 * 60 * 1000;
+  state.currentUser = {
+    username: matchedUser.username,
+    role: matchedUser.role,
+    displayName: "TAG-mPRO Auditor",
+  };
+  localStorage.setItem(STORAGE_KEYS.session, JSON.stringify({ user: state.currentUser, token: "", localOnly: true, expiresAt: Date.now() + duration }));
+  state.cases = readJSON(STORAGE_KEYS.cases, []);
+  const active = getActiveCase();
+  if (active) hydrateCase(active);
+  showApp();
+  toast("Signed in locally. Saved work will stay in this browser.");
+  return true;
 }
 
 async function handleSignup() {
@@ -581,26 +610,26 @@ async function handleSignup() {
   }
   const result = await postApi("/api/auth/signup", payload);
   if (!result.ok) {
-    $("#auth-error").textContent = result.error || "Account create nahi hua. Backend server running hai ya nahi check karein.";
+    $("#auth-error").textContent = result.error || "Account creation requires a configured backend API.";
     return;
   }
-  toast("Account created. Ab sign in karein.");
+  toast("Account created. You can sign in now.");
   setAuthMode("signin");
 }
 
 function validatePasswordClient(password, confirmPassword) {
-  if (password !== confirmPassword) return "Password aur confirm password match nahi kar rahe.";
-  if (password.length < 8) return "Password minimum 8 characters ka hona chahiye.";
-  if (!/[A-Z]/.test(password)) return "Password me ek uppercase letter hona chahiye.";
-  if (!/[a-z]/.test(password)) return "Password me ek lowercase letter hona chahiye.";
-  if (!/\d/.test(password)) return "Password me ek number hona chahiye.";
-  if (!/[^A-Za-z0-9]/.test(password)) return "Password me ek special character hona chahiye.";
+  if (password !== confirmPassword) return "Password and confirm password do not match.";
+  if (password.length < 8) return "Password must be at least 8 characters.";
+  if (!/[A-Z]/.test(password)) return "Password must include an uppercase letter.";
+  if (!/[a-z]/.test(password)) return "Password must include a lowercase letter.";
+  if (!/\d/.test(password)) return "Password must include a number.";
+  if (!/[^A-Za-z0-9]/.test(password)) return "Password must include a special character.";
   return "";
 }
 
 function restoreSession() {
   const session = readJSON(STORAGE_KEYS.session, null);
-  if (!session || !session.token || Date.now() > session.expiresAt) {
+  if (!session || Date.now() > session.expiresAt) {
     localStorage.removeItem(STORAGE_KEYS.session);
     showEntry();
     return;
@@ -611,7 +640,8 @@ function restoreSession() {
 
 async function signOut() {
   if (state.dirty) await saveCase();
-  await postApi("/api/auth/signout", {});
+  const session = readJSON(STORAGE_KEYS.session, null);
+  if (session?.token) await postApi("/api/auth/signout", {});
   localStorage.removeItem(STORAGE_KEYS.session);
   state.currentUser = null;
   showEntry();
@@ -624,7 +654,7 @@ function switchModule(moduleName) {
   $("#accounting-module").classList.toggle("hidden", !isAccounting);
   $("#module-placeholder").classList.toggle("hidden", isAccounting);
   if (!isAccounting) {
-    $("#module-placeholder").innerHTML = `<div class="placeholder-panel"><h1>${escapeHTML(toTitle(moduleName))}</h1><p>This workspace will connect to the reconciliation workflow in the next phase.</p></div>`;
+    $("#module-placeholder").innerHTML = `<div class="placeholder-panel"><h1>${escapeHTML(toTitle(moduleName))}</h1><p>This workspace will connect to the reconciliation workflow in a later release.</p></div>`;
   }
 }
 
@@ -649,6 +679,8 @@ function startNewCase() {
   state.sort = { column: null, direction: "asc" };
   state.accountingFilters = {};
   state.globalFilters = {};
+  state.searchQuery = "";
+  $("#table-search").value = "";
   state.activeView = "reconciliation";
   $("#campaign-choice").classList.add("hidden");
   $("#campaign-panel").classList.remove("hidden");
@@ -667,7 +699,7 @@ function showExistingCases() {
   const list = $("#existing-list");
   list.classList.remove("hidden");
   if (!state.cases.length) {
-    list.innerHTML = `<div class="existing-card"><strong>No saved reconciliations</strong><span>Sample ya upload se pehla case save karein.</span></div>`;
+    list.innerHTML = `<div class="existing-card"><strong>No saved reconciliations</strong><span>Load sample data or upload files, then save your first case.</span></div>`;
     return;
   }
   list.innerHTML = "";
@@ -708,7 +740,7 @@ async function importSourceFiles(sourceKey) {
   const input = $(`#${config.inputId}`);
   const files = Array.from(input.files || []);
   if (!files.length) {
-    toast(`${config.label} file select karein.`);
+    toast(`Select a file for ${config.label}.`);
     return;
   }
 
@@ -722,11 +754,13 @@ async function importSourceFiles(sourceKey) {
     deriveProgramAndPrRows();
     state.accountingFilters = {};
     state.globalFilters = {};
+    state.searchQuery = "";
+    $("#table-search").value = "";
     state.activeView = sourceKey;
     if (!$("#campaign-name").value.trim()) $("#campaign-name").value = "Invoice reconciliation";
     state.dirty = true;
     renderAll();
-    toast(`${imported.length} rows ${config.label} mein imported.`);
+    toast(`${imported.length} rows imported into ${config.label}.`);
   } catch (error) {
     toast(error.message || "Import failed.");
   }
@@ -741,7 +775,7 @@ async function parseFileForSource(file, sourceKey) {
     const text = await file.text();
     return normalizeRows(parseDelimitedRows(text, name.endsWith(".tsv") ? "\t" : ","), sourceKey, file.name);
   }
-  if (!window.XLSX) throw new Error("XLSX parser load nahi hua. CSV use karein ya internet on karke reload karein.");
+  if (!window.XLSX) throw new Error("The XLSX parser did not load. Use CSV or reload with an internet connection.");
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data, { type: "array", cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -830,11 +864,13 @@ function loadSample() {
   deriveProgramAndPrRows({ overwrite: false });
   state.accountingFilters = {};
   state.globalFilters = {};
+  state.searchQuery = "";
+  $("#table-search").value = "";
   state.activeView = "reconciliation";
   if (!$("#campaign-name").value.trim()) $("#campaign-name").value = "TAG-mPRO Reconciliation Sample";
   state.dirty = true;
   renderAll();
-  toast("Sample loaded. Filters 4 sources ke combined data se ban gaye.");
+  toast("Sample data loaded. Filters and reconciliation results are ready.");
 }
 
 function addRow() {
@@ -878,7 +914,7 @@ async function saveCase() {
   }
   state.dirty = false;
   $("#save-status").textContent = `Saved ${formatDateTime(caseItem.updatedAt)}`;
-  toast(apiOnline ? "Reconciliation saved to SQL database." : "Reconciliation saved in browser storage. Start SQL API for database save.");
+  toast(apiOnline ? "Reconciliation saved to the database." : "Reconciliation saved in this browser.");
 }
 
 function exportCsv() {
@@ -900,6 +936,7 @@ function renderAll() {
   renderSummary();
   renderGlobalFilters();
   renderAccountingFilters();
+  renderFilterChips();
   renderColumnPanel();
   renderGrid();
 }
@@ -973,6 +1010,7 @@ function renderGlobalFilters() {
     const select = $(`[data-global-filter="${key}"]`);
     fillSelectFromRows(select, rows, key, state.globalFilters[key]);
   });
+  updateGlobalFilterCount();
   localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
 }
 
@@ -1001,6 +1039,56 @@ function renderAccountingFilters() {
   localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
 }
 
+function renderFilterChips() {
+  const chipBar = $("#active-filter-chips");
+  if (!chipBar) return;
+  const chips = [];
+  Object.entries(state.globalFilters).forEach(([key, value]) => {
+    if (value) chips.push({ type: "global", key, label: toTitle(key), value });
+  });
+  Object.entries(state.accountingFilters).forEach(([key, value]) => {
+    if (value) chips.push({ type: "accounting", key, label: toTitle(key), value });
+  });
+  if (state.searchQuery) chips.push({ type: "search", key: "search", label: "Search", value: state.searchQuery });
+
+  if (!chips.length) {
+    chipBar.innerHTML = `<span class="empty-chip">No active filters</span>`;
+    updateGlobalFilterCount();
+    return;
+  }
+
+  chipBar.innerHTML = chips.map((chip) => (
+    `<button class="filter-chip" type="button" data-filter-type="${chip.type}" data-filter-key="${chip.key}">
+      <span>${escapeHTML(chip.label)}: ${escapeHTML(chip.value)}</span><b>x</b>
+    </button>`
+  )).join("");
+  chipBar.querySelectorAll(".filter-chip").forEach((button) => {
+    button.addEventListener("click", () => clearFilterChip(button.dataset.filterType, button.dataset.filterKey));
+  });
+  updateGlobalFilterCount();
+}
+
+function updateGlobalFilterCount() {
+  const counter = $("#global-filter-count");
+  if (!counter) return;
+  const count = Object.values(state.globalFilters).filter(Boolean).length;
+  counter.textContent = count ? `${count} active` : "All records";
+}
+
+function clearFilterChip(type, key) {
+  if (type === "global") {
+    delete state.globalFilters[key];
+    localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
+  } else if (type === "accounting") {
+    delete state.accountingFilters[key];
+    localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
+  } else if (type === "search") {
+    state.searchQuery = "";
+    $("#table-search").value = "";
+  }
+  renderAll();
+}
+
 function fillSelectFromRows(select, rows, key, current) {
   const values = uniqueValues(rows.map((row) => readField(row, key))).filter(Boolean);
   select.innerHTML = `<option value="">All</option>${values.map((value) => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("")}`;
@@ -1011,7 +1099,9 @@ function fillSelectFromRows(select, rows, key, current) {
 function handleGlobalFilter(event) {
   const key = event.target.dataset.globalFilter;
   state.globalFilters[key] = event.target.value;
+  if (!state.globalFilters[key]) delete state.globalFilters[key];
   localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
+  renderFilterChips();
   renderGrid();
 }
 
@@ -1023,7 +1113,9 @@ function resetGlobalFilters() {
 
 function handleAccountingFilter(event) {
   state.accountingFilters[event.target.dataset.accountFilter] = event.target.value;
+  if (!state.accountingFilters[event.target.dataset.accountFilter]) delete state.accountingFilters[event.target.dataset.accountFilter];
   localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
+  renderFilterChips();
   renderGrid();
 }
 
@@ -1031,6 +1123,7 @@ function clearAccountingFilters() {
   state.accountingFilters = {};
   localStorage.removeItem(STORAGE_KEYS.accountingFilters);
   renderAccountingFilters();
+  renderFilterChips();
   renderGrid();
 }
 
@@ -1062,9 +1155,18 @@ function renderGrid() {
     columns.forEach((column) => {
       const td = document.createElement("td");
       td.style.width = `${state.columnWidths[column] || 160}px`;
+      const readOnly = state.activeView === "reconciliation" || state.activeView === "combined";
+      if (readOnly) {
+        const value = row[column] || "";
+        const text = document.createElement("span");
+        text.className = ["Reconciliation Status", "Status"].includes(column) ? `status-pill ${normalizeKey(value).replace(/\s+/g, "-")}` : "cell-text";
+        text.textContent = value;
+        td.appendChild(text);
+        tr.appendChild(td);
+        return;
+      }
       const input = document.createElement("input");
       input.value = row[column] || "";
-      input.disabled = state.activeView === "reconciliation";
       input.addEventListener("input", () => {
         row[column] = input.value;
         state.dirty = true;
@@ -1101,6 +1203,9 @@ function getActiveRows() {
 function getFilteredRows() {
   let rows = [...getActiveRows()];
   rows = rows.filter(matchesGlobalFilters).filter(matchesAccountingFilters);
+  if (state.searchQuery) {
+    rows = rows.filter((row) => Object.values(row).some((value) => String(value || "").toLowerCase().includes(state.searchQuery)));
+  }
   if (state.sort.column) {
     const direction = state.sort.direction === "asc" ? 1 : -1;
     rows.sort((a, b) => compareValues(a[state.sort.column], b[state.sort.column]) * direction);
@@ -1475,8 +1580,9 @@ function escapeHTML(value) {
 
 async function loadCasesFromApi() {
   try {
+    if (!API_BASE) return null;
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
-    if (!token) return [];
+    if (!token) return null;
     const response = await fetchWithTimeout(`${API_BASE}/api/cases`, { method: "GET", headers: { Authorization: `Bearer ${token}` } }, 900);
     if (!response.ok) throw new Error("API unavailable");
     const payload = await response.json();
@@ -1490,6 +1596,7 @@ async function loadCasesFromApi() {
 
 async function saveCaseToApi(caseItem) {
   try {
+    if (!API_BASE) throw new Error("API not configured");
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     if (!token) throw new Error("Missing auth token");
     const response = await fetchWithTimeout(
@@ -1516,6 +1623,10 @@ async function saveCaseToApi(caseItem) {
 
 async function postApi(path, payload) {
   try {
+    if (!API_BASE) {
+      apiOnline = false;
+      return { ok: false, error: "Backend API is not configured for this deployment." };
+    }
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     const response = await fetchWithTimeout(
       `${API_BASE}${path}`,
@@ -1531,7 +1642,7 @@ async function postApi(path, payload) {
     return response.ok ? { ok: true, data } : { ok: false, error: data.error };
   } catch {
     apiOnline = false;
-    return { ok: false, error: "Secure login ke liye backend server start karein." };
+    return { ok: false, error: "Backend API is not reachable from this deployment." };
   }
 }
 

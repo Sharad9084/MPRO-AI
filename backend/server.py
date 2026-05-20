@@ -263,15 +263,15 @@ def verify_password(password, salt, expected_hash):
 
 def validate_password(password):
     if len(password) < 8:
-        return "Password minimum 8 characters ka hona chahiye."
+        return "Password must be at least 8 characters."
     if not re.search(r"[A-Z]", password):
-        return "Password me ek uppercase letter hona chahiye."
+        return "Password must include an uppercase letter."
     if not re.search(r"[a-z]", password):
-        return "Password me ek lowercase letter hona chahiye."
+        return "Password must include a lowercase letter."
     if not re.search(r"\d", password):
-        return "Password me ek number hona chahiye."
+        return "Password must include a number."
     if not re.search(r"[^A-Za-z0-9]", password):
-        return "Password me ek special character hona chahiye."
+        return "Password must include a special character."
     return None
 
 
@@ -394,7 +394,7 @@ def create_user(payload):
     if role not in ALLOWED_ROLES:
         raise ValueError("Invalid role selected.")
     if password != confirm_password:
-        raise ValueError("Password aur confirm password match nahi kar rahe.")
+        raise ValueError("Password and confirm password do not match.")
     password_error = validate_password(password)
     if password_error:
         raise ValueError(password_error)
@@ -409,7 +409,7 @@ def create_user(payload):
                 (str(uuid.uuid4()), username, display_name, role, password_hash, salt),
             )
         except sqlite3.IntegrityError as exc:
-            raise ValueError("Is email se account already exist karta hai.") from exc
+            raise ValueError("An account already exists for this email.") from exc
         row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     return public_user(row)
 
@@ -420,10 +420,10 @@ def authenticate_user(payload):
     with connect() as conn:
         row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         if not row:
-            raise ValueError("Username ya password galat hai.")
+            raise ValueError("Username or password is incorrect.")
         locked_until = parse_iso(row["locked_until"])
         if locked_until and locked_until > datetime.now(timezone.utc):
-            raise ValueError(f"Account temporarily locked hai. {LOCK_MINUTES} minutes baad try karein.")
+            raise ValueError(f"Account is temporarily locked. Try again after {LOCK_MINUTES} minutes.")
         if not verify_password(password, row["password_salt"], row["password_hash"]):
             failed_attempts = int(row["failed_attempts"] or 0) + 1
             locked = None
@@ -433,7 +433,7 @@ def authenticate_user(payload):
                 "UPDATE users SET failed_attempts = ?, locked_until = ?, updated_at = ? WHERE id = ?",
                 (failed_attempts, locked, now_iso(), row["id"]),
             )
-            raise ValueError("Username ya password galat hai.")
+            raise ValueError("Username or password is incorrect.")
         conn.execute(
             "UPDATE users SET failed_attempts = 0, locked_until = NULL, updated_at = ? WHERE id = ?",
             (now_iso(), row["id"]),

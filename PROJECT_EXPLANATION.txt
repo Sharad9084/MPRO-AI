@@ -5,36 +5,56 @@ Project name:
 TAG-mPRO - Marketing Performance Reconciliation and Optimisation
 
 Purpose:
-This application helps an auditor validate marketing campaign spending by uploading multiple business files, converting them into structured tables, and reconciling values across Program, PR, PO, schedule, invoice and monitoring data.
+This application helps an auditor validate marketing campaign spending by uploading multiple business files, converting them into structured tables, and reconciling values across Program, PR, PO, media schedule, agency invoice, third-party invoice, and monitoring data.
 
 Current application flow:
-1. Sign in screen
+1. Entry screen with TAG-mPRO dashboard preview
 2. Role selection screen
-3. Auditor sign in
+3. Auditor sign in or account creation
 4. Accounting workspace
-5. Upload files
-6. Review source tables
-7. Use filters and configurable columns
-8. Review reconciliation issues
+5. New or existing reconciliation selection
+6. Compact source-file upload area
+7. CRM-style table workspace with search, view tabs, filter chips, configurable columns, and summary counters
+8. Reconciliation issue review
 9. Save the reconciliation case
 
 Login:
 Username: auditor@mpro.com
 Password: Auditor@2026
 
+Deployment and sign-in behavior:
+The frontend can work as a static deployed site.
+If a backend API is configured and reachable, sign in uses the backend session token and saved cases can be stored in the database.
+If the deployed/static frontend cannot reach a backend API, the demo auditor account can sign in locally and saved cases stay in browser localStorage.
+This avoids showing a local server-start requirement to deployed users.
+
+API configuration:
+The frontend checks window.TAG_MPRO_API_BASE or localStorage key mpro.apiBase first.
+For localhost or direct file usage, it defaults to http://127.0.0.1:8787.
+For deployed domains, no local API is assumed unless an API base URL is configured.
+
 Security:
-Accounts are now created through the backend API.
+Backend accounts are created through the API when the API is running.
 Passwords are not stored as plain text. The backend stores a password salt and PBKDF2-SHA256 password hash.
-Password rules require at least 8 characters, uppercase, lowercase, number and special character.
+Password rules require at least 8 characters, uppercase, lowercase, number, and special character.
 Repeated failed sign-in attempts lock the account temporarily.
-Sign in creates a server-side session token.
-Sign off revokes the active session token.
-Reconciliation cases require a valid session token to load or save through the API.
+Backend sign in creates a server-side session token.
+Sign off revokes the active session token when one exists.
+Local demo sign in is only a browser-local fallback for static deployments.
 
 Roles:
 1. Advertiser Login - planned for next phase
 2. Agency Login - planned for next phase
 3. Auditor Login - active now
+
+Current UI updates:
+The app now uses English-only interface copy.
+The top navigation uses a darker CRM-style bar.
+Global filters are compact and open as a hover/focus popover instead of permanently taking a full row.
+The accounting workspace has a CRM-style title area, right-side actions, saved-view style tabs, search, active filter chips, summary counters, compact uploads, and a cleaner table.
+The upload area uses tighter source cards with short source icons and reduced vertical space.
+The first screen uses a refreshed dashboard hero illustration.
+The layout is responsive across desktop, tablet, and mobile widths.
 
 Main upload inputs:
 1. Media Schedule
@@ -45,7 +65,7 @@ Main upload inputs:
 
 Logical tables in the app:
 1. Program / Campaign
-   Top-level campaign data such as budget, campaign ID, campaign name and manager.
+   Top-level campaign data such as budget, campaign ID, campaign name, brand, advertiser, and manager.
 
 2. PR
    Purchase requisition level data. One campaign/program can have multiple PR numbers.
@@ -54,19 +74,19 @@ Logical tables in the app:
    Purchase order data. One PR can have multiple PO numbers. Total PO amount should not exceed PR amount.
 
 4. Media Schedule
-   Planned campaign execution data such as channel, program, date, air time, spots and planned amount.
+   Planned campaign execution data such as channel, program, date, air time, spots, rate, and planned amount.
 
 5. Agency Invoice
-   Agency invoice data with invoice number, invoice date, PO/PR references, campaign and cost values.
+   Agency invoice data with invoice number, invoice date, PO/PR references, campaign, channel, spot, and cost values.
 
 6. 3rd Party Invoice
-   External vendor invoice data. For TV this means broadcaster invoice, for print publisher invoice, and for other media a 3rd party vendor invoice.
+   External vendor invoice data. For TV this can mean broadcaster invoice, for print publisher invoice, and for other media a third-party vendor invoice.
 
 7. 3rd Party Monitoring Report
-   Proof/monitoring data. For TV this can be AdEx or BARC, for print tear sheet copies, and for digital platform/3rd party monitoring/DCM reports.
+   Proof/monitoring data. For TV this can be AdEx or BARC, for print tear sheet copies, and for digital platform, third-party monitoring, or DCM reports.
 
 8. Reconciliation
-   Calculated table that compares the above tables and highlights missing data, amount mismatches and budget hierarchy issues.
+   Calculated table that compares the above tables and highlights missing data, amount mismatches, monitoring gaps, and budget hierarchy issues.
 
 Important business hierarchy:
 Program/Campaign is the top level.
@@ -76,6 +96,7 @@ All PR amounts together should stay within the campaign/program budget.
 All PO amounts under a PR should stay within that PR amount.
 
 Current reconciliation checks:
+- PR data missing
 - PO missing
 - Media schedule missing
 - Agency invoice missing
@@ -87,8 +108,13 @@ Current reconciliation checks:
 - Schedule vs 3rd party invoice amount review
 - Agency vs 3rd party invoice amount review
 
-Column customization:
-The Columns button lets the user show or hide columns for the active table. The grid also supports sorting, resizing and reordering columns.
+Table behavior:
+The Columns button lets the user show or hide columns for the active table.
+The grid supports sorting, resizing, and reordering columns.
+Reconciliation and combined views are read-only table views.
+Source tables remain editable where manual correction is useful.
+The search field filters visible rows across table values.
+Active filters appear as removable filter chips.
 
 Sample files:
 - sample-po.csv
@@ -100,15 +126,15 @@ Sample files:
 - sample-pr.csv
 
 Storage behavior:
-The frontend uses API_BASE = http://127.0.0.1:8787.
-If the backend API is running and the user is signed in, Save sends data to the local backend server.
+If the backend API is reachable and the user has a server session token, Save sends data to the backend.
 The local SQLite backend stores data in backend/mpro_reconciliation.db.
-The PostgreSQL backend stores data in PostgreSQL when backend/server_postgres.py is running and DATABASE_URL is correctly configured.
-If no backend API is running, the app falls back to browser localStorage.
+The PostgreSQL backend stores data in PostgreSQL when backend/server_postgres.py is running and DATABASE_URL is configured.
+If no backend API is configured or reachable, Save stores cases in browser localStorage.
 
 Cloud status:
-This project is not saving to cloud by default.
-Right now it saves to the user's system/local machine unless PostgreSQL is configured on a remote cloud server and DATABASE_URL points to that cloud database.
+This project is not saving to a cloud database by default.
+Static deployment saves locally in the user's browser unless a reachable backend API URL is configured.
+Cloud database storage requires deploying the backend and configuring TAG_MPRO_API_BASE or localStorage mpro.apiBase to point at that backend.
 
 PostgreSQL mode:
 Run PostgreSQL, create the database mpro_reconciliation, set DATABASE_URL, then run:
@@ -119,5 +145,6 @@ $env:DATABASE_URL="postgresql://postgres:your_password@localhost:5432/mpro_recon
 python backend/server_postgres.py
 
 Frontend:
-Open index.html directly or serve the folder locally. During local testing it can be opened at:
+Open index.html directly, serve the folder locally, or deploy it as a static frontend.
+During local testing it can be opened at:
 http://127.0.0.1:8000/index.html
