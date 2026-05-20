@@ -13,11 +13,11 @@ Auditor login:
 
 New accounts can be created from the sign-in screen when the backend API is running. Passwords are hashed by the backend and API case access requires a signed-in session.
 
-If the frontend is deployed without a reachable backend API, the demo auditor account signs in locally and saved cases stay in browser storage. Users can also create browser-local accounts on static deployments.
+For local development or direct-file testing without a reachable backend API, the demo auditor account can sign in locally and saved cases stay in browser storage. On a deployed Vercel domain, configure PostgreSQL so shared links use real database storage.
 
 On Vercel, this repository now includes Python Functions under `api/` for shared backend access. Vercel will not run `backend/server.py` as a persistent Python server; instead `/api/*` routes call the PostgreSQL backend logic per request.
 
-For shared cloud cases, add a hosted PostgreSQL connection string as the Vercel `DATABASE_URL` environment variable, then redeploy.
+For shared cloud cases, add a hosted PostgreSQL connection string in Vercel environment variables, then redeploy. Supported names are `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `NEON_DATABASE_URL`, or `SUPABASE_DB_URL`.
 
 ## SQL Mode
 
@@ -66,7 +66,15 @@ Deploy this repository to Vercel and set:
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
 ```
 
-The frontend will call same-domain API routes such as `/api/auth/signin` and `/api/cases`. If `DATABASE_URL` is not set, the app falls back to browser-local accounts and browser storage.
+The frontend calls same-domain API routes such as `/api/auth/signin` and `/api/cases`. If a deployed Vercel site does not have PostgreSQL configured, sign-in shows a cloud database error instead of silently behaving like shared storage.
+
+Recommended Vercel setup:
+
+1. Create a hosted PostgreSQL database with Vercel Postgres, Neon, or Supabase.
+2. Add its connection string to the Vercel project as `DATABASE_URL` or `POSTGRES_URL`.
+3. Redeploy the project.
+4. Open `/api/health` on the deployed domain. It should return `{"ok": true, "database": "postgres", "configured": true}`.
+5. Sign in, save a reconciliation, then open the same link in another browser and sign in again to confirm shared database storage.
 
 ## Current Flow
 
@@ -77,6 +85,7 @@ The frontend will call same-domain API routes such as `/api/auth/signin` and `/a
   - Compact hover/focus global filters
   - Workspace actions for sample data, export and save
   - Search and active filter chips
+  - Basic filters for budget, invoice number, PR number, PO number, invoice date, proof of performance, expense monitoring, campaign type, campaign manager, and program name
   - Compact upload cards
   - Configurable columns and polished table states
 - Accounting page with 5 upload boxes:

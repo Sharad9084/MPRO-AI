@@ -1,5 +1,4 @@
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -18,6 +17,9 @@ def ensure_db():
     global DB_READY
     if DB_READY:
         return
+    core.DATABASE_URL = core.configured_database_url()
+    if not core.DATABASE_URL:
+        raise RuntimeError("PostgreSQL connection string is not configured.")
     core.init_db()
     DB_READY = True
 
@@ -50,8 +52,8 @@ def options(handler):
 
 
 def require_database(handler):
-    if os.getenv("DATABASE_URL"):
+    if core.configured_database_url():
         ensure_db()
         return True
-    send_json(handler, 503, {"error": "DATABASE_URL is not configured."})
+    send_json(handler, 503, {"error": "PostgreSQL is not configured. Set DATABASE_URL or POSTGRES_URL in Vercel environment variables."})
     return False

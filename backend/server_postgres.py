@@ -22,9 +22,26 @@ except ImportError as exc:
 
 ROOT = Path(__file__).resolve().parent
 SCHEMA_PATH = ROOT / "schema.postgres.sql"
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/mpro_reconciliation")
 HOST = os.getenv("TAG_MPRO_API_HOST", os.getenv("MPRO_API_HOST", "127.0.0.1"))
 PORT = int(os.getenv("TAG_MPRO_API_PORT", os.getenv("MPRO_API_PORT", "8787")))
+
+
+def configured_database_url():
+    for key in (
+        "DATABASE_URL",
+        "POSTGRES_URL",
+        "POSTGRES_PRISMA_URL",
+        "POSTGRES_URL_NON_POOLING",
+        "NEON_DATABASE_URL",
+        "SUPABASE_DB_URL",
+    ):
+        value = os.getenv(key)
+        if value:
+            return value
+    return ""
+
+
+DATABASE_URL = configured_database_url() or "postgresql://postgres:postgres@localhost:5432/mpro_reconciliation"
 
 
 SOURCE_TABLES = {
@@ -41,6 +58,9 @@ SOURCE_TABLES = {
 FIELD_ALIASES = {
     "advertiser_name": ["Advertiser Name", "Advertiser"],
     "campaign_id": ["Campaign ID", "Program ID"],
+    "campaign_type": ["Campaign Type", "Campaigns Type", "Campaings Type", "Campaign Category", "Activity Type", "Media Type", "Medium"],
+    "campaign_manager": ["Campaign Manager", "Campaigns Manager", "Campaings Manager", "Program Manager", "Manager"],
+    "program_name": ["Program Name", "Programme Name", "Program", "TP", "Telecast Program"],
     "budget": ["Budget", "Campaign Budget", "Program Budget"],
     "program_manager": ["Program Manager", "Campaign Manager"],
     "pr_number": ["PR Number", "PR No", "PR"],
@@ -78,6 +98,8 @@ FIELD_ALIASES = {
     "air_time": ["Air Time", "Telecast Time"],
     "duration_sec": ["Duration Sec", "LEN (Duration Sec)", "Spot Duration"],
     "spot_copy_caption": ["Spot Copy Caption", "Spot Copy (Caption)", "Caption"],
+    "proof_of_performance": ["Proof of Performance", "POP", "Proof", "Monitoring Proof", "Tear Sheet", "DCM Proof", "BARC Proof", "AdEx Proof"],
+    "expense_monitoring": ["Expense Monitoring", "Expense Monitorning", "Expense Monitor", "Spend Monitoring", "Cost Monitoring"],
     "rate_inr": ["Rate INR", "Rate (INR)", "Rate"],
     "spots": ["Spots", "Date Wise Spots", "Spot Count"],
     "planned_amount": ["Planned Amount", "Schedule Amount", "Media Schedule Amount"],
@@ -90,6 +112,9 @@ TABLE_COLUMNS = {
     "program_records": [
         "campaign_id",
         "campaign_name",
+        "campaign_type",
+        "campaign_manager",
+        "program_name",
         "budget",
         "program_manager",
         "brand",
@@ -103,23 +128,31 @@ TABLE_COLUMNS = {
         "brand_name",
         "campaign_name",
         "campaign_id",
+        "campaign_type",
+        "campaign_manager",
+        "program_name",
         "pr_amount",
     ],
     "po_records": [
         "campaign_id",
         "campaign_name",
+        "campaign_type",
+        "campaign_manager",
+        "program_name",
         "pr_number",
         "advertiser_name",
         "po_number",
         "po_date",
         "agency_name",
         "brand",
-        "campaign_name",
         "po_amount_incl_tax",
     ],
     "media_schedule_records": [
         "campaign_id",
         "campaign_name",
+        "campaign_type",
+        "campaign_manager",
+        "program_name",
         "pr_number",
         "po_number",
         "advertiser_name",
@@ -148,6 +181,9 @@ TABLE_COLUMNS = {
         "campaign_id",
         "brand",
         "campaign_name",
+        "campaign_type",
+        "campaign_manager",
+        "program_name",
         "total_value_including_taxes",
         "channel_name",
         "program",
@@ -171,6 +207,9 @@ TABLE_COLUMNS = {
         "invoice_number",
         "invoice_date",
         "campaign_id",
+        "campaign_type",
+        "campaign_manager",
+        "program_name",
         "tp",
         "program",
         "activity_date",
@@ -191,12 +230,17 @@ TABLE_COLUMNS = {
         "brand",
         "campaign_id",
         "campaign_name",
+        "campaign_type",
+        "campaign_manager",
+        "program_name",
         "program",
         "activity_date",
         "day_name",
         "air_time",
         "duration_sec",
         "spot_copy_caption",
+        "proof_of_performance",
+        "expense_monitoring",
         "monitoring_status",
     ],
 }
@@ -231,10 +275,46 @@ POSTGRES_COLUMN_MIGRATIONS = {
         "campaign_id": "TEXT",
         "campaign_name": "TEXT",
         "pr_number": "TEXT",
+        "campaign_type": "TEXT",
+        "campaign_manager": "TEXT",
+        "program_name": "TEXT",
+    },
+    "reconciliation_cases": {
+        "user_id": "TEXT REFERENCES users(id) ON DELETE SET NULL",
+    },
+    "program_records": {
+        "campaign_type": "TEXT",
+        "campaign_manager": "TEXT",
+        "program_name": "TEXT",
+    },
+    "pr_records": {
+        "campaign_type": "TEXT",
+        "campaign_manager": "TEXT",
+        "program_name": "TEXT",
+    },
+    "media_schedule_records": {
+        "campaign_type": "TEXT",
+        "campaign_manager": "TEXT",
+        "program_name": "TEXT",
     },
     "agency_invoice_records": {
         "pr_number": "TEXT",
         "campaign_id": "TEXT",
+        "campaign_type": "TEXT",
+        "campaign_manager": "TEXT",
+        "program_name": "TEXT",
+    },
+    "third_party_invoice_records": {
+        "campaign_type": "TEXT",
+        "campaign_manager": "TEXT",
+        "program_name": "TEXT",
+    },
+    "third_party_monitoring_records": {
+        "campaign_type": "TEXT",
+        "campaign_manager": "TEXT",
+        "program_name": "TEXT",
+        "proof_of_performance": "TEXT",
+        "expense_monitoring": "TEXT",
     },
 }
 
@@ -516,19 +596,24 @@ def insert_uploaded_files(conn, case_id, datasets):
             )
 
 
-def upsert_case(payload):
+def upsert_case(payload, user=None):
     case = payload.get("case", payload)
     case_id = case.get("id") or str(uuid.uuid4())
     datasets = case.get("datasets") or {}
     updated_at = now_iso()
+    user_id = user["id"] if user else None
     with connect() as conn:
+        existing_owner = conn.execute("SELECT user_id FROM reconciliation_cases WHERE id = %s", (case_id,)).fetchone()
+        if existing_owner and existing_owner["user_id"] and existing_owner["user_id"] != user_id:
+            raise ValueError("This reconciliation belongs to another account.")
         conn.execute(
             """
             INSERT INTO reconciliation_cases(
-              id, name, active_view, column_orders_json, column_widths_json, sort_json, raw_json, updated_at
+              id, user_id, name, active_view, column_orders_json, column_widths_json, sort_json, raw_json, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT(id) DO UPDATE SET
+              user_id = COALESCE(reconciliation_cases.user_id, EXCLUDED.user_id),
               name = EXCLUDED.name,
               active_view = EXCLUDED.active_view,
               column_orders_json = EXCLUDED.column_orders_json,
@@ -539,6 +624,7 @@ def upsert_case(payload):
             """,
             (
                 case_id,
+                user_id,
                 case.get("name") or "Untitled reconciliation",
                 case.get("activeView") or "reconciliation",
                 Jsonb(case.get("columnOrders") or {}),
@@ -586,6 +672,27 @@ def list_cases():
     return cases
 
 
+def list_cases_for_user(user):
+    if not user:
+        return []
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT raw_json, updated_at
+            FROM reconciliation_cases
+            WHERE user_id = %s OR user_id IS NULL
+            ORDER BY updated_at DESC
+            """,
+            (user["id"],),
+        ).fetchall()
+    cases = []
+    for row in rows:
+        case = row["raw_json"]
+        case["updatedAt"] = row["updated_at"].isoformat() if hasattr(row["updated_at"], "isoformat") else row["updated_at"]
+        cases.append(case)
+    return cases
+
+
 class Handler(BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -602,10 +709,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             json_response(self, 200, {"ok": True, "database": "postgresql"})
         elif path == "/api/cases":
-            if not require_user(self):
+            user = require_user(self)
+            if not user:
                 json_response(self, 401, {"error": "Unauthorized"})
                 return
-            json_response(self, 200, {"cases": list_cases()})
+            json_response(self, 200, {"cases": list_cases_for_user(user)})
         else:
             json_response(self, 404, {"error": "Not found"})
 
@@ -631,12 +739,15 @@ class Handler(BaseHTTPRequestHandler):
             revoke_session(auth_header_token(self))
             json_response(self, 200, {"ok": True})
         elif path == "/api/cases":
-            if not require_user(self):
+            user = require_user(self)
+            if not user:
                 json_response(self, 401, {"error": "Unauthorized"})
                 return
             try:
-                case = upsert_case(read_body(self))
+                case = upsert_case(read_body(self), user)
                 json_response(self, 200, {"case": case})
+            except ValueError as exc:
+                json_response(self, 403, {"error": str(exc)})
             except Exception as exc:
                 json_response(self, 500, {"error": str(exc)})
         else:

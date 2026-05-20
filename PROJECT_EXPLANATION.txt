@@ -25,12 +25,12 @@ Password: Auditor@2026
 Deployment and sign-in behavior:
 The frontend can work as a static deployed site.
 If a backend API is configured and reachable, sign in uses the backend session token and saved cases can be stored in the database.
-If the deployed/static frontend cannot reach a backend API, the demo auditor account can sign in locally and saved cases stay in browser localStorage.
-Users can also create browser-local accounts on static deployments. Local account passwords are stored as PBKDF2-SHA256 hashes using the browser Web Crypto API.
+If a local or direct-file frontend cannot reach a backend API, the demo auditor account can sign in locally and saved cases stay in browser localStorage.
+Users can also create browser-local accounts for local/direct-file testing. Local account passwords are stored as PBKDF2-SHA256 hashes using the browser Web Crypto API.
 This avoids showing a local server-start requirement to deployed users.
 Vercel can host the frontend and the shared backend together by using Python Functions under the api/ folder.
 Vercel will not run backend/server.py as a continuously running Python server; instead the deployed API routes call the PostgreSQL backend logic per request.
-Database-backed multi-user storage requires a hosted PostgreSQL DATABASE_URL in the Vercel project environment variables.
+Database-backed multi-user storage requires a hosted PostgreSQL connection string in the Vercel project environment variables. Supported names are DATABASE_URL, POSTGRES_URL, POSTGRES_PRISMA_URL, POSTGRES_URL_NON_POOLING, NEON_DATABASE_URL, and SUPABASE_DB_URL.
 
 API configuration:
 The frontend checks window.TAG_MPRO_API_BASE or localStorage key mpro.apiBase first.
@@ -56,6 +56,7 @@ The app now uses English-only interface copy.
 The top navigation uses a darker CRM-style bar.
 Global filters are compact and open as a hover/focus popover instead of permanently taking a full row.
 The accounting workspace has a CRM-style title area, right-side actions, saved-view style tabs, search, active filter chips, summary counters, compact uploads, and a cleaner table.
+Basic global/accounting filters are available for budget, invoice number, PR number, PO number, invoice date, proof of performance, expense monitoring, campaign type, campaign manager, and program name.
 The upload area uses tighter source cards with short source icons and reduced vertical space.
 The first screen uses a refreshed dashboard hero illustration.
 The layout is responsive across desktop, tablet, and mobile widths.
@@ -119,6 +120,7 @@ Reconciliation and combined views are read-only table views.
 Source tables remain editable where manual correction is useful.
 The search field filters visible rows across table values.
 Active filters appear as removable filter chips.
+Filters are driven by field aliases, so uploaded files can use common variants such as PR No, PO No, Invoice No, Campaign Manager, Program Name, POP, and Expense Monitoring.
 
 Sample files:
 - sample-po.csv
@@ -137,9 +139,10 @@ If no backend API is configured or reachable, Save stores cases in browser local
 
 Cloud status:
 This project is not saving to a cloud database by default.
-Vercel deployment saves to PostgreSQL when DATABASE_URL is configured and the deployed /api functions are healthy.
-If DATABASE_URL is missing or unreachable, the frontend falls back to browser-local accounts and browser localStorage cases.
-Browser-local accounts and cases are device/browser-specific. Sharing one Vercel link only shares a database between users when the Vercel project has a working hosted PostgreSQL DATABASE_URL.
+Vercel deployment saves to PostgreSQL when a supported PostgreSQL environment variable is configured and the deployed /api functions are healthy.
+If PostgreSQL is missing or unreachable on a deployed Vercel domain, sign-in reports a cloud database error.
+Browser-local accounts and cases are device/browser-specific. Sharing one Vercel link only shares a database between users when the Vercel project has a working hosted PostgreSQL connection string.
+For deployed Vercel domains, sign-in now reports a cloud database error when PostgreSQL is missing instead of presenting local storage as shared storage.
 
 Vercel backend routes:
 - GET /api/health

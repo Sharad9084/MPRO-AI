@@ -9,7 +9,8 @@ const STORAGE_KEYS = {
 
 const LOCAL_API_BASE = "http://127.0.0.1:8787";
 const configuredApiBase = window.TAG_MPRO_API_BASE || localStorage.getItem("mpro.apiBase") || "";
-const API_BASE = configuredApiBase || (["", "localhost", "127.0.0.1"].includes(window.location.hostname) ? LOCAL_API_BASE : "/api");
+const IS_LOCAL_APP = ["", "localhost", "127.0.0.1"].includes(window.location.hostname);
+const API_BASE = configuredApiBase || (IS_LOCAL_APP ? LOCAL_API_BASE : "");
 let apiOnline = false;
 
 const USERS = [
@@ -28,8 +29,11 @@ const SOURCE_CONFIG = {
       "Source",
       "Campaign ID",
       "Campaign Name",
+      "Program Name",
+      "Campaign Type",
       "Budget",
       "Program Manager",
+      "Campaign Manager",
       "Brand",
       "Advertiser Name",
       "Status",
@@ -46,6 +50,9 @@ const SOURCE_CONFIG = {
       "Brand Name",
       "Campaign Name",
       "Campaign ID",
+      "Campaign Type",
+      "Campaign Manager",
+      "Program Name",
       "PR Amount",
       "Status",
     ],
@@ -57,6 +64,9 @@ const SOURCE_CONFIG = {
       "Source",
       "Campaign ID",
       "Campaign Name",
+      "Campaign Type",
+      "Campaign Manager",
+      "Program Name",
       "PR Number",
       "Advertiser Name",
       "PO Number",
@@ -75,6 +85,9 @@ const SOURCE_CONFIG = {
       "Source",
       "Campaign ID",
       "Campaign Name",
+      "Campaign Type",
+      "Campaign Manager",
+      "Program Name",
       "PR Number",
       "PO Number",
       "Advertiser Name",
@@ -110,6 +123,9 @@ const SOURCE_CONFIG = {
       "Campaign ID",
       "Brand",
       "Campaign Name",
+      "Campaign Type",
+      "Campaign Manager",
+      "Program Name",
       "Total Value Including Taxes",
       "Channel Name",
       "Program",
@@ -140,6 +156,9 @@ const SOURCE_CONFIG = {
       "Invoice Number",
       "Invoice Date",
       "Campaign ID",
+      "Campaign Type",
+      "Campaign Manager",
+      "Program Name",
       "TP",
       "Program",
       "Date",
@@ -167,12 +186,17 @@ const SOURCE_CONFIG = {
       "Brand",
       "Campaign ID",
       "Campaign Name",
+      "Campaign Type",
+      "Campaign Manager",
+      "Program Name",
       "Program",
       "Date",
       "Day",
       "Air Time",
       "Duration Sec",
       "Spot Copy Caption",
+      "Proof of Performance",
+      "Expense Monitoring",
       "Monitoring Status",
       "File Name",
       "Status",
@@ -185,9 +209,16 @@ const GLOBAL_FILTERS = [
   "agency",
   "brand",
   "campaign",
+  "campaignType",
+  "campaignManager",
+  "programName",
+  "budget",
   "prNumber",
   "poNumber",
   "invoiceNumber",
+  "invoiceDate",
+  "proofOfPerformance",
+  "expenseMonitoring",
   "vendor",
   "channel",
   "status",
@@ -199,11 +230,17 @@ const FILTER_DEFS = [
   { key: "agency", label: "Agency" },
   { key: "brand", label: "Brand" },
   { key: "campaign", label: "Campaign" },
+  { key: "campaignType", label: "Campaign Type" },
+  { key: "campaignManager", label: "Campaign Manager" },
+  { key: "programName", label: "Program Name" },
+  { key: "budget", label: "Budget" },
   { key: "campaignId", label: "Campaign ID" },
   { key: "prNumber", label: "PR Number" },
   { key: "poNumber", label: "PO Number" },
   { key: "invoiceNumber", label: "Invoice Number" },
   { key: "invoiceDate", label: "Invoice Date" },
+  { key: "proofOfPerformance", label: "Proof of Performance" },
+  { key: "expenseMonitoring", label: "Expense Monitoring" },
   { key: "vendor", label: "Vendor" },
   { key: "channel", label: "Channel" },
   { key: "program", label: "Program" },
@@ -220,7 +257,10 @@ const FIELD_ALIASES = {
   brandName: ["brand name", "brand"],
   campaignId: ["campaign id", "program id"],
   campaign: ["campaign", "campaign name", "description", "activity", "activity month"],
+  campaignType: ["campaign type", "campaigns type", "campaings type", "campaign category", "activity type", "media type", "medium"],
+  campaignManager: ["campaign manager", "campaigns manager", "campaings manager", "program manager", "manager"],
   programManager: ["program manager", "campaign manager", "manager"],
+  programName: ["program name", "programme name", "program", "tp", "telecast program"],
   mediaType: ["media type", "medium"],
   prNumber: ["pr number", "pr no", "pr", "purchase requisition number"],
   prDate: ["pr date", "purchase requisition date"],
@@ -239,7 +279,7 @@ const FIELD_ALIASES = {
   channel: ["channel", "channel name", "station relation", "stn"],
   billingPeriod: ["billing period"],
   tp: ["tp", "telecast program"],
-  program: ["program"],
+  program: ["program", "program name", "programme name"],
   timeBand: ["time band", "time range", "sales unit", "time range/sales unit"],
   date: ["date", "telecast date"],
   day: ["day", "dy"],
@@ -250,6 +290,8 @@ const FIELD_ALIASES = {
   rate: ["rate inr", "rate", "spot rate", "spot rate per 10 sec"],
   amount: ["calculated amount inr", "calculate final amount inr", "net cost", "amount", "total"],
   plannedAmount: ["planned amount", "schedule amount", "media schedule amount"],
+  proofOfPerformance: ["proof of performance", "pop", "proof", "monitoring proof", "tear sheet", "tear sheet status", "dcm proof", "barc proof", "adex proof"],
+  expenseMonitoring: ["expense monitoring", "expense monitorning", "expense monitor", "monitoring expense", "spend monitoring", "cost monitoring"],
   monitoringStatus: ["monitoring status", "status"],
   status: ["reconciliation status", "status", "match status"],
   fileName: ["file name", "filename"],
@@ -562,9 +604,11 @@ async function handleSignin() {
   const password = $("#password").value;
   const result = await postApi("/api/auth/signin", { username, password });
   if (!result.ok) {
-    const localSignin = await signInWithLocalAccount(username, password);
-    if (localSignin) return;
-    $("#auth-error").textContent = result.error || "Sign in failed. Check the configured API connection or create a local account.";
+    if (IS_LOCAL_APP) {
+      const localSignin = await signInWithLocalAccount(username, password);
+      if (localSignin) return;
+    }
+    $("#auth-error").textContent = sharedDatabaseError(result.error, "Sign in failed. Check the configured API connection or create a local account.");
     return;
   }
   state.currentUser = result.data.user;
@@ -626,6 +670,10 @@ async function handleSignup() {
   }
   const result = await postApi("/api/auth/signup", payload);
   if (!result.ok) {
+    if (!IS_LOCAL_APP) {
+      $("#auth-error").textContent = sharedDatabaseError(result.error, "Account creation failed because the cloud database is not connected.");
+      return;
+    }
     if (isLocalAuthFallback(result.error)) {
       const created = await createLocalAccount(payload);
       if (created) {
@@ -997,7 +1045,7 @@ async function saveCase() {
   }
   state.dirty = false;
   $("#save-status").textContent = `Saved ${formatDateTime(caseItem.updatedAt)}`;
-  toast(apiOnline ? "Reconciliation saved to the database." : "Reconciliation saved in this browser.");
+  toast(apiOnline ? "Reconciliation saved to the database." : (IS_LOCAL_APP ? "Reconciliation saved in this browser." : "Cloud database is not connected. This was only saved in this browser."));
 }
 
 function exportCsv() {
@@ -1304,6 +1352,9 @@ function getActiveColumns(rows, options = {}) {
       "Issues",
       "Campaign ID",
       "Campaign Name",
+      "Campaign Type",
+      "Campaign Manager",
+      "Program Name",
       "PR Number",
       "PO Number",
       "Advertiser Name",
@@ -1315,6 +1366,8 @@ function getActiveColumns(rows, options = {}) {
       "Media Schedule Amount",
       "Agency Total Value",
       "3rd Party Invoice Amount",
+      "Proof of Performance",
+      "Expense Monitoring",
       "Program Budget Balance",
       "PR Budget Balance",
       "Agency Rows",
@@ -1362,8 +1415,11 @@ function deriveProgramAndPrRows(options = {}) {
         Source: "Derived Program",
         "Campaign ID": campaignId,
         "Campaign Name": campaign,
+        "Program Name": readField(row, "programName") || readField(row, "program"),
+        "Campaign Type": readField(row, "campaignType"),
         Budget: String(sumValues(related, "budget") || sumValues(related, "prAmount") || sumValues(related, "poAmount") || sumValues(related, "totalValue") || ""),
         "Program Manager": readField(row, "programManager"),
+        "Campaign Manager": readField(row, "campaignManager"),
         Brand: readField(row, "brand"),
         "Advertiser Name": readField(row, "advertiser"),
         Status: "Derived",
@@ -1382,6 +1438,9 @@ function deriveProgramAndPrRows(options = {}) {
         "Brand Name": readField(row, "brand"),
         "Campaign Name": campaign,
         "Campaign ID": campaignId,
+        "Campaign Type": readField(row, "campaignType"),
+        "Campaign Manager": readField(row, "campaignManager"),
+        "Program Name": readField(row, "programName") || readField(row, "program"),
         "PR Amount": String(sumValues(related, "prAmount") || sumValues(related, "poAmount") || sumValues(related, "totalValue") || ""),
         Status: "Derived",
       });
@@ -1442,6 +1501,9 @@ function buildReconciliationRows() {
       Issues: issues.join("; ") || "Matched",
       "Campaign ID": campaignId,
       "Campaign Name": campaignName,
+      "Campaign Type": readField(first, "campaignType"),
+      "Campaign Manager": readField(first, "campaignManager"),
+      "Program Name": readField(first, "programName") || readField(first, "program"),
       "PR Number": readField(first, "prNumber") || linkedPrNumber,
       "PO Number": poNumber,
       "Advertiser Name": readField(first, "advertiser"),
@@ -1453,6 +1515,8 @@ function buildReconciliationRows() {
       "Media Schedule Amount": scheduleAmount ? String(scheduleAmount) : "",
       "Agency Total Value": agencyAmount ? String(agencyAmount) : "",
       "3rd Party Invoice Amount": thirdPartyAmount ? String(thirdPartyAmount) : "",
+      "Proof of Performance": readField(monitoringRows[0] || first, "proofOfPerformance"),
+      "Expense Monitoring": readField(monitoringRows[0] || first, "expenseMonitoring"),
       "Program Budget Balance": programBudget ? String(programBudget - prAmount) : "",
       "PR Budget Balance": prAmount ? String(prAmount - poAmount) : "",
       "Agency Rows": String(agencyRows.length),
@@ -1643,7 +1707,10 @@ function csvEscape(value) {
 }
 
 function toTitle(value) {
-  return String(value).replace(/(^|\s|-)\w/g, (match) => match.toUpperCase()).replace(/-/g, " ");
+  return String(value)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/(^|\s|-)\w/g, (match) => match.toUpperCase())
+    .replace(/-/g, " ");
 }
 
 function formatDateTime(value) {
@@ -1663,10 +1730,9 @@ function escapeHTML(value) {
 
 async function loadCasesFromApi() {
   try {
-    if (!API_BASE) return null;
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     if (!token) return null;
-    const response = await fetchWithTimeout(`${API_BASE}/api/cases`, { method: "GET", headers: { Authorization: `Bearer ${token}` } }, 900);
+    const response = await fetchWithTimeout(apiUrl("/api/cases"), { method: "GET", headers: { Authorization: `Bearer ${token}` } }, 900);
     if (!response.ok) throw new Error("API unavailable");
     const payload = await response.json();
     apiOnline = true;
@@ -1679,11 +1745,10 @@ async function loadCasesFromApi() {
 
 async function saveCaseToApi(caseItem) {
   try {
-    if (!API_BASE) throw new Error("API not configured");
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     if (!token) throw new Error("Missing auth token");
     const response = await fetchWithTimeout(
-      `${API_BASE}/api/cases`,
+      apiUrl("/api/cases"),
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -1706,13 +1771,9 @@ async function saveCaseToApi(caseItem) {
 
 async function postApi(path, payload) {
   try {
-    if (!API_BASE) {
-      apiOnline = false;
-      return { ok: false, error: "Backend API is not configured for this deployment." };
-    }
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     const response = await fetchWithTimeout(
-      `${API_BASE}${path}`,
+      apiUrl(path),
       {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -1727,6 +1788,23 @@ async function postApi(path, payload) {
     apiOnline = false;
     return { ok: false, error: "Backend API is not reachable from this deployment." };
   }
+}
+
+function sharedDatabaseError(error, fallback) {
+  if (!IS_LOCAL_APP) {
+    return error || "Cloud database is not connected. Add DATABASE_URL or POSTGRES_URL in Vercel, redeploy, then try again.";
+  }
+  return error || fallback;
+}
+
+function apiUrl(path) {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const cleanBase = String(API_BASE || "").replace(/\/+$/, "");
+  if (!cleanBase) return cleanPath;
+  if (cleanBase.endsWith("/api") && cleanPath.startsWith("/api/")) {
+    return `${cleanBase}${cleanPath.slice(4)}`;
+  }
+  return `${cleanBase}${cleanPath}`;
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 1000) {
