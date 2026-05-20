@@ -13,7 +13,9 @@ Auditor login:
 
 New accounts can be created from the sign-in screen when the backend API is running. Passwords are hashed by the backend and API case access requires a signed-in session.
 
-If the frontend is deployed without a reachable backend API, the demo auditor account signs in locally and saved cases stay in browser storage.
+If the frontend is deployed without a reachable backend API, the demo auditor account signs in locally and saved cases stay in browser storage. Users can also create browser-local accounts on static deployments.
+
+On Vercel, this repository works as a static frontend. Vercel will not automatically run `backend/server.py` as a persistent Python database API. For shared cloud cases, deploy the backend separately and configure `window.TAG_MPRO_API_BASE` or localStorage key `mpro.apiBase`.
 
 ## SQL Mode
 

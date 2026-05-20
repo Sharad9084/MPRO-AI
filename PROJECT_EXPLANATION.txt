@@ -26,7 +26,9 @@ Deployment and sign-in behavior:
 The frontend can work as a static deployed site.
 If a backend API is configured and reachable, sign in uses the backend session token and saved cases can be stored in the database.
 If the deployed/static frontend cannot reach a backend API, the demo auditor account can sign in locally and saved cases stay in browser localStorage.
+Users can also create browser-local accounts on static deployments. Local account passwords are stored as PBKDF2-SHA256 hashes using the browser Web Crypto API.
 This avoids showing a local server-start requirement to deployed users.
+Vercel can host this frontend as a static site, but it will not run backend/server.py as a continuously running Python server. Database-backed multi-user storage still requires deploying the backend separately.
 
 API configuration:
 The frontend checks window.TAG_MPRO_API_BASE or localStorage key mpro.apiBase first.
@@ -135,6 +137,7 @@ Cloud status:
 This project is not saving to a cloud database by default.
 Static deployment saves locally in the user's browser unless a reachable backend API URL is configured.
 Cloud database storage requires deploying the backend and configuring TAG_MPRO_API_BASE or localStorage mpro.apiBase to point at that backend.
+Browser-local accounts and cases are device/browser-specific. Sharing one Vercel link does not automatically share a database between users unless the backend is deployed and configured.
 
 PostgreSQL mode:
 Run PostgreSQL, create the database mpro_reconciliation, set DATABASE_URL, then run:

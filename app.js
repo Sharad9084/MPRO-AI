@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   activeCase: "mpro.activeCase.v1",
   accountingFilters: "mpro.accountingFilters.v3",
   globalFilters: "mpro.globalFilters.v3",
+  localUsers: "mpro.localUsers.v1",
 };
 
 const LOCAL_API_BASE = "http://127.0.0.1:8787";
@@ -561,9 +562,9 @@ async function handleSignin() {
   const password = $("#password").value;
   const result = await postApi("/api/auth/signin", { username, password });
   if (!result.ok) {
-    const localSignin = signInWithLocalAuditor(username, password);
+    const localSignin = await signInWithLocalAccount(username, password);
     if (localSignin) return;
-    $("#auth-error").textContent = result.error || "Sign in failed. Check the configured API connection or use the demo auditor account.";
+    $("#auth-error").textContent = result.error || "Sign in failed. Check the configured API connection or create a local account.";
     return;
   }
   state.currentUser = result.data.user;
@@ -576,16 +577,31 @@ async function handleSignin() {
   showApp();
 }
 
-function signInWithLocalAuditor(username, password) {
+async function signInWithLocalAccount(username, password) {
+  const localUsers = readJSON(STORAGE_KEYS.localUsers, []);
+  const localUser = localUsers.find((user) => user.username === username);
+  if (localUser) {
+    const valid = await verifyLocalPassword(password, localUser.passwordSalt, localUser.passwordHash);
+    if (!valid) return false;
+    return startLocalSession({
+      username: localUser.username,
+      role: localUser.role,
+      displayName: localUser.displayName,
+    });
+  }
   const matchedUser = USERS.find((user) => user.username === username && user.password === password);
   if (!matchedUser) return false;
-  const remember = $("#remember-me").checked;
-  const duration = remember ? 30 * 24 * 60 * 60 * 1000 : 8 * 60 * 60 * 1000;
-  state.currentUser = {
+  return startLocalSession({
     username: matchedUser.username,
     role: matchedUser.role,
     displayName: "TAG-mPRO Auditor",
-  };
+  });
+}
+
+function startLocalSession(user) {
+  const remember = $("#remember-me").checked;
+  const duration = remember ? 30 * 24 * 60 * 60 * 1000 : 8 * 60 * 60 * 1000;
+  state.currentUser = user;
   localStorage.setItem(STORAGE_KEYS.session, JSON.stringify({ user: state.currentUser, token: "", localOnly: true, expiresAt: Date.now() + duration }));
   state.cases = readJSON(STORAGE_KEYS.cases, []);
   const active = getActiveCase();
@@ -610,11 +626,56 @@ async function handleSignup() {
   }
   const result = await postApi("/api/auth/signup", payload);
   if (!result.ok) {
-    $("#auth-error").textContent = result.error || "Account creation requires a configured backend API.";
+    if (isLocalAuthFallback(result.error)) {
+      const created = await createLocalAccount(payload);
+      if (created) {
+        toast("Local account created. You can sign in now on this browser.");
+        setAuthMode("signin");
+      }
+      return;
+    }
+    $("#auth-error").textContent = result.error || "Account creation failed.";
     return;
   }
   toast("Account created. You can sign in now.");
   setAuthMode("signin");
+}
+
+function isLocalAuthFallback(error) {
+  return !API_BASE || /not configured|not reachable|failed to fetch|network|api/i.test(String(error || ""));
+}
+
+async function createLocalAccount(payload) {
+  const username = payload.username;
+  const displayName = payload.displayName;
+  const role = payload.role || "Auditor";
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(username)) {
+    $("#auth-error").textContent = "Enter a valid email address.";
+    return false;
+  }
+  if (!displayName) {
+    $("#auth-error").textContent = "Full name is required.";
+    return false;
+  }
+  const localUsers = readJSON(STORAGE_KEYS.localUsers, []);
+  const reservedDemo = USERS.some((user) => user.username === username);
+  if (reservedDemo || localUsers.some((user) => user.username === username)) {
+    $("#auth-error").textContent = "An account already exists for this email.";
+    return false;
+  }
+  const passwordSalt = crypto.randomUUID();
+  const passwordHash = await hashLocalPassword(payload.password, passwordSalt);
+  localUsers.push({
+    id: crypto.randomUUID(),
+    username,
+    displayName,
+    role,
+    passwordSalt,
+    passwordHash,
+    createdAt: new Date().toISOString(),
+  });
+  localStorage.setItem(STORAGE_KEYS.localUsers, JSON.stringify(localUsers));
+  return true;
 }
 
 function validatePasswordClient(password, confirmPassword) {
@@ -625,6 +686,28 @@ function validatePasswordClient(password, confirmPassword) {
   if (!/\d/.test(password)) return "Password must include a number.";
   if (!/[^A-Za-z0-9]/.test(password)) return "Password must include a special character.";
   return "";
+}
+
+async function hashLocalPassword(password, salt) {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: encoder.encode(salt),
+      iterations: 120000,
+    },
+    keyMaterial,
+    256,
+  );
+  return Array.from(new Uint8Array(bits)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyLocalPassword(password, salt, expectedHash) {
+  if (!salt || !expectedHash) return false;
+  const actualHash = await hashLocalPassword(password, salt);
+  return actualHash === expectedHash;
 }
 
 function restoreSession() {
