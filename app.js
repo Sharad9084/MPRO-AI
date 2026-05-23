@@ -24,7 +24,7 @@ const USERS = [
 
 const SOURCE_CONFIG = {
   program: {
-    label: "Program / Campaign",
+    label: "Campaign",
     columns: [
       "Source",
       "Campaign ID",
@@ -40,7 +40,7 @@ const SOURCE_CONFIG = {
     ],
   },
   pr: {
-    label: "PR",
+    label: "PR - Purchase Requisition",
     columns: [
       "Source",
       "PR Number",
@@ -58,7 +58,7 @@ const SOURCE_CONFIG = {
     ],
   },
   po: {
-    label: "PO",
+    label: "PO - Purchase Order",
     inputId: "po-input",
     columns: [
       "Source",
@@ -79,7 +79,7 @@ const SOURCE_CONFIG = {
     ],
   },
   mediaSchedule: {
-    label: "Media Schedule",
+    label: "Media Estimate/Schedule",
     inputId: "media-schedule-input",
     columns: [
       "Source",
@@ -141,7 +141,7 @@ const SOURCE_CONFIG = {
     ],
   },
   thirdPartyInvoice: {
-    label: "3rd Party Invoice",
+    label: "Publisher Invoice",
     inputId: "third-party-invoice-input",
     columns: [
       "Source",
@@ -205,47 +205,22 @@ const SOURCE_CONFIG = {
 };
 
 const GLOBAL_FILTERS = [
-  "advertiser",
-  "agency",
-  "brand",
   "campaign",
-  "campaignType",
-  "campaignManager",
-  "programName",
-  "budget",
-  "prNumber",
-  "poNumber",
-  "invoiceNumber",
-  "invoiceDate",
-  "proofOfPerformance",
-  "expenseMonitoring",
-  "vendor",
+  "agency",
+  "mediaType",
   "channel",
-  "status",
 ];
 
 const FILTER_DEFS = [
-  { key: "source", label: "Source" },
-  { key: "advertiser", label: "Advertiser" },
-  { key: "agency", label: "Agency" },
-  { key: "brand", label: "Brand" },
-  { key: "campaign", label: "Campaign" },
-  { key: "campaignType", label: "Campaign Type" },
-  { key: "campaignManager", label: "Campaign Manager" },
-  { key: "programName", label: "Program Name" },
   { key: "budget", label: "Budget" },
-  { key: "campaignId", label: "Campaign ID" },
-  { key: "prNumber", label: "PR Number" },
-  { key: "poNumber", label: "PO Number" },
   { key: "invoiceNumber", label: "Invoice Number" },
+  { key: "prNumber", label: "PR No." },
+  { key: "poNumber", label: "PO No." },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "proofOfPerformance", label: "Proof of Performance" },
   { key: "expenseMonitoring", label: "Expense Monitoring" },
-  { key: "vendor", label: "Vendor" },
-  { key: "channel", label: "Channel" },
-  { key: "program", label: "Program" },
-  { key: "date", label: "Date" },
-  { key: "status", label: "Status" },
+  { key: "campaignType", label: "Campaign Type" },
+  { key: "programName", label: "Program Name" },
 ];
 
 const FIELD_ALIASES = {
@@ -299,25 +274,59 @@ const FIELD_ALIASES = {
 
 const HELP_CONTENT = {
   mediaSchedule: {
-    title: "Media Schedule",
-    lines: ["Supported: CSV, TSV, XLS, XLSX, PDF", "Recommended size: under 20 MB", "Use this for planned spots, dates, channels and schedule amount."],
+    title: "Media Estimate/Schedule",
+    lines: ["Supported: PDF files", "Recommended size: under 20 MB", "Use this for planned spots, dates, channels and schedule amount."],
   },
   agency: {
     title: "Agency Invoice",
-    lines: ["Supported: CSV, TSV, XLS, XLSX, PDF", "Recommended size: under 20 MB", "Upload agency invoice with PO/PR/campaign references."],
+    lines: ["Supported: PDF files", "Recommended size: under 20 MB", "Upload agency invoice with PO/PR/campaign references."],
   },
   thirdPartyInvoice: {
-    title: "3rd Party Invoice",
-    lines: ["Supported: CSV, TSV, XLS, XLSX, PDF", "TV: upload broadcaster invoice", "Print: upload publisher invoice", "Other: 3rd party vendor invoice"],
+    title: "Publisher Invoice",
+    lines: ["Supported: PDF files", "TV: upload broadcaster invoice", "Print: upload publisher invoice", "Other: 3rd party vendor invoice"],
   },
   thirdPartyMonitoring: {
     title: "3rd Party Monitoring Report",
-    lines: ["Supported: CSV, TSV, XLS, XLSX, PDF", "TV: AdEx or BARC report", "Print: tear sheet copies", "Digital: platform or 3rd party monitoring and DCM report"],
+    lines: ["Supported: PDF files", "TV: AdEx or BARC report", "Print: tear sheet copies", "Digital: platform or 3rd party monitoring and DCM report"],
   },
   po: {
     title: "PO",
-    lines: ["Supported: CSV, TSV, XLS, XLSX, PDF", "Recommended size: under 20 MB", "Upload purchase order extract or PO PDF."],
+    lines: ["Supported: PDF files", "Recommended size: under 20 MB", "Upload purchase order PDF."],
   },
+};
+
+const QUALITY_REQUIRED_FIELDS = {
+  po: ["advertiser", "poNumber", "poDate", "agency", "brand", "campaign", "poAmount"],
+  mediaSchedule: ["poNumber", "advertiser", "agency", "brand", "channel", "program", "date", "duration", "spots", "rate", "plannedAmount"],
+  agency: ["agency", "advertiser", "invoiceNumber", "invoiceDate", "estimateNumber", "estimatePeriod", "poNumber", "brand", "campaign", "channel", "program", "broadcaster", "date", "spots", "duration", "rate", "amount"],
+  thirdPartyInvoice: ["advertiser", "vendor", "agency", "invoiceNumber", "invoiceDate", "channel", "date", "airTime", "duration", "caption", "brand"],
+  thirdPartyMonitoring: ["channel", "brand", "program", "date", "airTime", "duration", "caption", "monitoringStatus"],
+};
+
+const QUALITY_LABELS = {
+  advertiser: "Advertiser",
+  agency: "Agency",
+  vendor: "Vendor/Broadcaster",
+  brand: "Brand",
+  campaign: "Campaign",
+  poNumber: "PO Number",
+  poDate: "PO Date",
+  invoiceNumber: "Invoice Number",
+  invoiceDate: "Invoice Date",
+  estimateNumber: "Estimate Number",
+  estimatePeriod: "Estimate Period",
+  channel: "Channel",
+  program: "Program",
+  broadcaster: "Broadcaster",
+  date: "Date",
+  airTime: "Air Time",
+  duration: "Duration",
+  spots: "Spots",
+  rate: "Rate",
+  amount: "Amount",
+  plannedAmount: "Planned Amount",
+  caption: "Caption",
+  monitoringStatus: "Monitoring Status",
 };
 
 const SAMPLE_DATASETS = {
@@ -461,7 +470,7 @@ const state = {
   activeModule: "accounting",
   cases: [],
   activeCaseId: null,
-  activeView: "reconciliation",
+  activeView: "agency",
   datasets: emptyDatasets(),
   columnOrders: {},
   columnWidths: {},
@@ -491,10 +500,20 @@ async function loadState() {
   const apiCases = session && session.token && Date.now() <= session.expiresAt ? await loadCasesFromApi(session.token) : null;
   state.cases = apiCases || readJSON(STORAGE_KEYS.cases, []);
   state.activeCaseId = session ? localStorage.getItem(STORAGE_KEYS.activeCase) : null;
-  state.globalFilters = readJSON(STORAGE_KEYS.globalFilters, {});
-  state.accountingFilters = readJSON(STORAGE_KEYS.accountingFilters, {});
+  state.globalFilters = keepKnownFilters(readJSON(STORAGE_KEYS.globalFilters, {}), GLOBAL_FILTERS);
+  state.accountingFilters = keepKnownFilters(readJSON(STORAGE_KEYS.accountingFilters, {}), FILTER_DEFS.map((item) => item.key));
   const active = getActiveCase();
   if (active) hydrateCase(active);
+}
+
+function keepKnownFilters(filters, allowedKeys) {
+  const allowed = new Set(allowedKeys);
+  return Object.fromEntries(
+    Object.entries(filters || {})
+      .filter(([key]) => allowed.has(key))
+      .map(([key, value]) => [key, normalizeFilterValues(value)])
+      .filter(([, values]) => values.length),
+  );
 }
 
 function bindEvents() {
@@ -514,13 +533,11 @@ function bindEvents() {
   $$("#app-shell [data-global-filter]").forEach((select) => select.addEventListener("change", handleGlobalFilter));
   $$(".source-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
   $$("[data-import-source]").forEach((button) => button.addEventListener("click", () => importSourceFiles(button.dataset.importSource)));
-  $$(".help-dot").forEach((button) => button.addEventListener("click", () => showUploadHelp(button.dataset.help)));
+  $$(".help-dot").forEach((button) => button.addEventListener("click", () => button.focus()));
   $("#reset-global-filters").addEventListener("click", resetGlobalFilters);
   $("#collapse-filters").addEventListener("click", () => setFiltersCollapsed(true));
   $("#expand-filters").addEventListener("click", () => setFiltersCollapsed(false));
-  $("#new-campaign-button").addEventListener("click", startNewCase);
-  $("#existing-campaign-button").addEventListener("click", showExistingCases);
-  $("#load-sample").addEventListener("click", loadSample);
+  $("#load-sample")?.addEventListener("click", loadSample);
   $("#add-row").addEventListener("click", addRow);
   $("#column-settings").addEventListener("click", toggleColumnPanel);
   $("#export-csv").addEventListener("click", exportCsv);
@@ -567,9 +584,23 @@ function showApp() {
   $("#role-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
   $("#app-shell").classList.remove("hidden");
-  $("#signed-in-user").textContent = `${state.currentUser.role} - ${state.currentUser.username}`;
+  $("#signed-in-user").textContent = signedInLabel();
+  $("#campaign-choice").classList.add("hidden");
+  $("#campaign-panel").classList.remove("hidden");
+  const active = getActiveCase();
+  if (active) $("#campaign-name").value = active.name || "";
+  setFiltersCollapsed(true);
   switchModule(state.activeModule);
   renderAll();
+}
+
+function signedInLabel() {
+  const user = state.currentUser || {};
+  return user.username || user.displayName || "Signed in user";
+}
+
+function visibleView(view) {
+  return ["program", "pr", "po", "mediaSchedule", "agency", "thirdPartyInvoice"].includes(view) ? view : "agency";
 }
 
 async function handleLogin(event) {
@@ -638,7 +669,7 @@ async function signInWithLocalAccount(username, password) {
   return startLocalSession({
     username: matchedUser.username,
     role: matchedUser.role,
-    displayName: "TAG-mPRO Auditor",
+    displayName: "",
   });
 }
 
@@ -812,7 +843,7 @@ function startNewCase() {
   state.globalFilters = {};
   state.searchQuery = "";
   $("#table-search").value = "";
-  state.activeView = "reconciliation";
+  state.activeView = "agency";
   $("#campaign-choice").classList.add("hidden");
   $("#campaign-panel").classList.remove("hidden");
   $("#existing-list").classList.add("hidden");
@@ -830,7 +861,8 @@ function showExistingCases() {
   const list = $("#existing-list");
   list.classList.remove("hidden");
   if (!state.cases.length) {
-    list.innerHTML = `<div class="existing-card"><strong>No saved reconciliations</strong><span>Load sample data or upload files, then save your first case.</span></div>`;
+    list.classList.add("hidden");
+    list.innerHTML = "";
     return;
   }
   list.innerHTML = "";
@@ -863,7 +895,7 @@ function hydrateCase(caseItem) {
   state.columnWidths = caseItem.columnWidths || {};
   state.hiddenColumns = caseItem.hiddenColumns || {};
   state.sort = caseItem.sort || { column: null, direction: "asc" };
-  state.activeView = caseItem.activeView || "reconciliation";
+  state.activeView = visibleView(caseItem.activeView);
 }
 
 async function importSourceFiles(sourceKey) {
@@ -876,22 +908,24 @@ async function importSourceFiles(sourceKey) {
   }
 
   try {
+    const pdfCount = files.filter((file) => /\.pdf$/i.test(file.name)).length;
     const imported = [];
     for (const file of files) {
       const parsed = await parseFileForSource(file, sourceKey);
       imported.push(...parsed.rows);
     }
-    state.datasets[sourceKey] = ["thirdPartyInvoice", "thirdPartyMonitoring"].includes(sourceKey) ? [...state.datasets[sourceKey], ...imported] : imported;
-    deriveProgramAndPrRows();
+    state.datasets[sourceKey] = [...(state.datasets[sourceKey] || []), ...imported];
+    deriveProgramAndPrRows({ overwrite: false });
     state.accountingFilters = {};
     state.globalFilters = {};
     state.searchQuery = "";
     $("#table-search").value = "";
-    state.activeView = sourceKey;
+    state.activeView = visibleView(sourceKey);
     if (!$("#campaign-name").value.trim()) $("#campaign-name").value = "Invoice reconciliation";
     state.dirty = true;
+    input.value = "";
     renderAll();
-    toast(`${imported.length} rows imported into ${config.label}.`);
+    toast(`${imported.length} PDF row${imported.length === 1 ? "" : "s"} extracted from ${pdfCount || files.length} file${(pdfCount || files.length) === 1 ? "" : "s"} into ${config.label}.`);
   } catch (error) {
     toast(error.message || "Import failed.");
   }
@@ -900,17 +934,12 @@ async function importSourceFiles(sourceKey) {
 async function parseFileForSource(file, sourceKey) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf")) {
-    return makePdfPlaceholderRows(file, sourceKey);
+    const extracted = await extractPdfFiles([file], sourceKey);
+    const rows = extracted.datasets?.[sourceKey] || [];
+    if (!rows.length) return makePdfPlaceholderRows(file, sourceKey);
+    return normalizeRows(rows, sourceKey, file.name);
   }
-  if (name.endsWith(".csv") || name.endsWith(".tsv")) {
-    const text = await file.text();
-    return normalizeRows(parseDelimitedRows(text, name.endsWith(".tsv") ? "\t" : ","), sourceKey, file.name);
-  }
-  if (!window.XLSX) throw new Error("The XLSX parser did not load. Use CSV or reload with an internet connection.");
-  const data = await file.arrayBuffer();
-  const workbook = XLSX.read(data, { type: "array", cellDates: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  return normalizeRows(XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false }), sourceKey, file.name);
+  throw new Error("Please upload PDF files only from these source cards.");
 }
 
 function makePdfPlaceholderRows(file, sourceKey) {
@@ -921,6 +950,408 @@ function makePdfPlaceholderRows(file, sourceKey) {
     Status: "PDF selected - extractor integration pending",
   };
   return normalizeRows([row], sourceKey, file.name);
+}
+
+async function extractPdfFiles(files, sourceHint = "") {
+  const uploadFiles = files.filter((file) => /\.pdf$/i.test(file.name));
+  if (!uploadFiles.length) throw new Error("Select PDF files for PDF extraction.");
+  const datasets = { po: [], mediaSchedule: [], agency: [], thirdPartyInvoice: [], thirdPartyMonitoring: [] };
+  for (const file of uploadFiles) {
+    const text = await extractPdfTextInBrowser(file);
+    const sourceKey = sourceHint || classifyPdfDocument(file.name, text);
+    const rows = extractRowsFromPdfText(sourceKey, text, file.name);
+    addPdfMetadata(rows, sourceKey, text, file.name);
+    datasets[sourceKey].push(...(rows.length ? rows : [makePdfReviewRow(sourceKey, file.name, text ? "No confident rows extracted" : "No selectable PDF text found")]));
+  }
+  return {
+    datasets,
+    summary: {
+      documents: uploadFiles.length,
+      rows: Object.values(datasets).reduce((total, rows) => total + rows.length, 0),
+    },
+  };
+}
+
+async function extractPdfTextInBrowser(file) {
+  if (!window.pdfjsLib) {
+    throw new Error("PDF reader is still loading or offline. Refresh once with internet access, then upload the PDF again.");
+  }
+  const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    pages.push(textContentToLines(content).join("\n"));
+  }
+  return cleanPdfText(pages.join("\n\n"));
+}
+
+function textContentToLines(content) {
+  const items = (content.items || [])
+    .filter((item) => String(item.str || "").trim())
+    .map((item) => ({ text: String(item.str).trim(), x: item.transform?.[4] || 0, y: item.transform?.[5] || 0 }))
+    .sort((a, b) => Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x);
+  const rows = [];
+  items.forEach((item) => {
+    const last = rows[rows.length - 1];
+    if (!last || Math.abs(last.y - item.y) > 3) rows.push({ y: item.y, parts: [item] });
+    else last.parts.push(item);
+  });
+  return rows.map((row) => row.parts.sort((a, b) => a.x - b.x).map((item) => item.text).join(" ").replace(/\s+/g, " ").trim());
+}
+
+function cleanPdfText(text) {
+  return String(text || "")
+    .replace(/\x00/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function classifyPdfDocument(name, text) {
+  const haystack = `${name}\n${text.slice(0, 4000)}`.toLowerCase();
+  if (haystack.includes("purchase order") || /\bpo[_ -]?\d/.test(haystack)) return "po";
+  if (haystack.includes("monitoring") || haystack.includes("spot id") || haystack.includes("advertise start")) return "thirdPartyMonitoring";
+  if (haystack.includes("annexure-1") || haystack.includes("client po number") || haystack.includes("estimate number")) return "agency";
+  if (haystack.includes("schedule") || haystack.includes("media estimate") || haystack.includes("planned amount")) return "mediaSchedule";
+  return "thirdPartyInvoice";
+}
+
+function extractRowsFromPdfText(sourceKey, text, fileName) {
+  if (sourceKey === "po") return [extractPoPdfRow(text, fileName)];
+  if (sourceKey === "mediaSchedule") return extractMediaSchedulePdfRows(text, fileName);
+  if (sourceKey === "agency") return extractAgencyPdfRows(text, fileName);
+  if (sourceKey === "thirdPartyMonitoring") return extractMonitoringPdfRows(text, fileName);
+  return extractPublisherInvoicePdfRows(text, fileName);
+}
+
+function makePdfReviewRow(sourceKey, fileName, status) {
+  return {
+    Source: SOURCE_CONFIG[sourceKey]?.label || "PDF",
+    "File Name": fileName,
+    Status: status,
+  };
+}
+
+function addPdfMetadata(rows, sourceKey, text, fileName) {
+  const proof = pdfSourceProof(sourceKey, text);
+  const confidence = pdfParserConfidence(sourceKey, rows);
+  rows.forEach((row) => {
+    row["Source Proof"] = proof;
+    row["Parser Confidence"] = confidence;
+  });
+}
+
+function extractPoPdfRow(text, fileName) {
+  const advertiser = pdfLines(text).find((line) => /pvt|private|limited|ltd/i.test(line) && !/vendor/i.test(line)) || "";
+  return {
+    ...makePdfReviewRow("po", fileName, "Extracted - review"),
+    "Advertiser Name": advertiser,
+    "PO Number": pdfFirstMatch(text, /PO\s+No\s*:?\s*(\d+)/i) || pdfValueAfterLabel(text, ["PO No", "PO Number"]),
+    "PO Date": pdfValueAfterLabel(text, ["Order date", "PO Date", "Purchase Order Date"]),
+    "Agency Name": pdfValueAfterLabel(text, ["Vendor", "Agency Name"]),
+    Brand: pdfValueAfterLabel(text, ["Brand", "Brand Name"]) || pdfFirstMatch(text, /\n\d+\s*0?([A-Z][A-Z0-9 ]+?)\n[A-Z]{2,}IN/i),
+    "Campaign Name": pdfValueAfterLabel(text, ["Campaign Name", "Description"]) || pdfFirstMatch(text, /\n[A-Z0-9]{6,}\n\d{6}\n(.+?est-\s*\d+PC)/i),
+    "PO Amount Incl Tax": pdfMoneyAfterLabel(text, ["TOTAL AMOUNT INCL.TAX", "Total Amount Incl Tax", "Total Amount"]),
+  };
+}
+
+function extractMediaSchedulePdfRows(text, fileName) {
+  const header = {
+    "Advertiser Name": pdfValueAfterLabel(text, ["Advertiser", "Client Name"]),
+    "Agency Name": pdfValueAfterLabel(text, ["Agency", "Agency Name", "Vendor"]),
+    Brand: pdfValueAfterLabel(text, ["Brand", "Brand Name"]),
+    "Campaign Name": pdfValueAfterLabel(text, ["Campaign Name", "Campaign"]),
+    "PO Number": pdfValueAfterLabel(text, ["PO Number", "PO No", "Client PO Number"]),
+    "Campaign Period": pdfValueAfterLabel(text, ["Campaign Period", "Estimate Period", "Billing Period"]),
+  };
+  const rows = [];
+  pdfLines(text).forEach((line) => {
+    const date = pdfFirstMatch(line, /(\d{1,2}[-/ ][A-Za-z]{3,}[-/ ]\d{2,4}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i);
+    if (!date) return;
+    const time = pdfFirstMatch(line, /(\d{1,2}:\d{2}(?::\d{2})?)/);
+    const numbers = line.match(/\d[\d,]*(?:\.\d+)?/g) || [];
+    const money = numbers.filter((item) => Number(item.replace(/,/g, "")) > 99);
+    if (!time && money.length < 2) return;
+    rows.push({
+      ...makePdfReviewRow("mediaSchedule", fileName, "Extracted - review"),
+      ...header,
+      "Channel Name": pdfValueAfterLabel(text, ["Channel", "Channel Name"]) || pdfFirstMatch(line, /^([A-Za-z][A-Za-z0-9 &-]+)\s+/),
+      Program: pdfValueAfterLabel(text, ["Program", "Programme"]) || line.replace(date, "").replace(time || "", "").trim().slice(0, 80),
+      Date: date,
+      "Air Time": time,
+      "Duration Sec": numbers.find((item) => Number(item) > 5 && Number(item) <= 300) || "",
+      Spots: numbers.find((item) => Number(item) > 0 && Number(item) <= 999) || "",
+      "Rate INR": money[money.length - 2] || "",
+      "Planned Amount": money[money.length - 1] || "",
+    });
+  });
+  if (rows.length) return rows;
+  return [{
+    ...makePdfReviewRow("mediaSchedule", fileName, "Header extracted - review"),
+    ...header,
+    "Planned Amount": pdfMoneyAfterLabel(text, ["Planned Amount", "Schedule Amount", "Total"]),
+  }];
+}
+
+function extractAgencyPdfRows(text, fileName) {
+  const header = {
+    "Agency Name": pdfLines(text)[0] || pdfValueAfterLabel(text, ["Agency Name"]),
+    "Advertiser Name": pdfFirstMatch(text, /Activity Details\s*\n(.+)/i) || pdfValueNear(text, "Service provided To", "Invoice Number"),
+    "Invoice Number": pdfValueAfterLabel(text, ["Invoice Number", "Invoice No"]),
+    "Invoice Date": pdfValueAfterLabel(text, ["Invoice Date"]),
+    "Campaign Period": pdfValueAfterLabel(text, ["Activity Month", "Campaign Period"]),
+    "Estimate Number": pdfValueAfterLabel(text, ["Estimate Number", "Estimate No"]),
+    "Estimate Period": pdfValueAfterLabel(text, ["Estimate Period"]),
+    "PO Number": pdfValueAfterLabel(text, ["Client PO Number", "PO Number", "PO No"]),
+    Brand: pdfValueAfterLabel(text, ["Brand Name", "Brand"]),
+    "Campaign Name": pdfMultilineValueAfterLabel(text, "Campaign Name", ["Country", "PAN Number", "GSTIN"]),
+    "Total Value Including Taxes": pdfMoneyAfterLabel(text, ["Grand Total", "Total Invoice Value", "Total Value Including Taxes", "Total Chargeable"]),
+  };
+  const rows = extractAgencyAnnexurePdfRows(text, fileName, header);
+  if (rows.length) return rows;
+  return [{ ...makePdfReviewRow("agency", fileName, "Header extracted - review"), ...header }];
+}
+
+function extractAgencyAnnexurePdfRows(text, fileName, header) {
+  if (!/Annexure-1/i.test(text)) return [];
+  const block = text.split(/Annexure-1/i)[1].split(/Annexure-2/i)[0];
+  const raw = pdfLines(block).filter((line) => ![
+    "channel", "program", "producer", "dates", "spot", "duration", "net spot rate", "per 10 sec", "no of spots", "net cost", "annexure-1",
+  ].includes(line.toLowerCase()));
+  const rows = [];
+  const used = new Set();
+  for (let costIndex = 3; costIndex < raw.length; costIndex += 1) {
+    if (used.has(costIndex)) continue;
+    if (!(pdfIsMoney(raw[costIndex]) && /^\d+$/.test(raw[costIndex - 1]) && pdfIsMoney(raw[costIndex - 2]) && /^\d{1,3}$/.test(raw[costIndex - 3]))) continue;
+    let dateEnd = costIndex - 4;
+    let dateStart = dateEnd;
+    while (dateStart >= 0 && pdfLooksLikeDateFragment(raw[dateStart])) dateStart -= 1;
+    dateStart += 1;
+    if (dateStart > dateEnd || dateStart < 3) continue;
+    const [channel, program, producer] = splitAgencyPdfPrefix(raw, dateStart);
+    if (!channel || !program) continue;
+    rows.push({
+      ...makePdfReviewRow("agency", fileName, "Extracted - review"),
+      ...header,
+      "Channel Name": channel,
+      Program: program,
+      "Broadcaster Name": producer,
+      Date: raw.slice(dateStart, dateEnd + 1).join(" "),
+      "Spot Duration": raw[costIndex - 3],
+      "Spot Rate Per 10 Sec": normalizePdfMoney(raw[costIndex - 2]),
+      "Date Wise Spots": raw[costIndex - 1],
+      "Net Cost": normalizePdfMoney(raw[costIndex]),
+    });
+    used.add(costIndex);
+  }
+  return rows;
+}
+
+function extractPublisherInvoicePdfRows(text, fileName) {
+  const header = {
+    "Media Type": "TV",
+    "Advertiser Name": pdfFirstMatch(text, /TAX INVOICE\s*\n(.+)/i) || pdfValueAfterLabel(text, ["Advertiser", "Client Name"]),
+    "Third Party Vendor Name": pdfFirstMatch(text, /For\s+(.+?)\s*\n/i) || pdfFirstMatch(text, /Beneficiary Name:\s*\n(.+)/i) || pdfValueAfterLabel(text, ["Vendor", "Publisher"]),
+    "Agency Name": pdfFirstMatch(text, /Traffic Order:\s*\n(.+)/i) || pdfValueAfterLabel(text, ["Agency Name", "Agency"]),
+    "Channel Name": pdfValueAfterLabel(text, ["Station Relation", "Channel Name", "Channel"]),
+    "Billing Period": pdfFirstMatch(text, /(\d{2}-[A-Za-z]{3}-\d{4}\s*-\s*\d{2}-[A-Za-z]{3}-\d{4})/i),
+    "PO Number": pdfValueAfterLabel(text, ["R.O. Number", "PO Number", "PO No"]),
+    "Invoice Number": pdfValueAfterLabel(text, ["Invoice No.", "Invoice No", "Invoice Number"]),
+    "Invoice Date": pdfValueAfterLabel(text, ["Invoice Date"]),
+    Brand: pdfValueAfterLabel(text, ["Brand", "Brand Name"]),
+  };
+  const rows = [];
+  const telecast = text.split(/TELECAST CERTIFICATE/i).pop();
+  let current = null;
+  pdfLines(telecast).forEach((line) => {
+    const match = line.match(/^(\d+)\s+(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\d{1,2}:\d{2}:\d{2})(.+)$/i);
+    if (match) {
+      if (current) rows.push(makePublisherPdfRow(header, current, fileName));
+      current = { Date: match[2], "Air Time": match[3], "Spot Copy Caption": match[4].trim() };
+      return;
+    }
+    if (!current) return;
+    if (/^\d{1,3}\s+/.test(line) && !/sec/i.test(line)) {
+      const [duration, ...program] = line.split(" ");
+      current["Duration Sec"] = duration;
+      current.Program = program.join(" ").trim();
+    } else if (/^\d{1,3}$/.test(line)) {
+      current["Duration Sec"] = line;
+    } else if (!current.Program && !/page \d+/i.test(line)) {
+      current.Program = line;
+    }
+  });
+  if (current) rows.push(makePublisherPdfRow(header, current, fileName));
+  if (rows.length) return rows;
+  return [{
+    ...makePdfReviewRow("thirdPartyInvoice", fileName, "Header extracted - review"),
+    ...header,
+    "Calculated Amount INR": pdfMoneyAfterLabel(text, ["Payable Amount", "Net Amount", "Total"]),
+  }];
+}
+
+function makePublisherPdfRow(header, current, fileName) {
+  return {
+    ...makePdfReviewRow("thirdPartyInvoice", fileName, "Extracted - review"),
+    ...header,
+    ...current,
+    "Calculated Amount INR": calculatePdfAmount(current["Duration Sec"], current["Rate INR"], 1),
+  };
+}
+
+function extractMonitoringPdfRows(text, fileName) {
+  const header = {
+    "Media Type": "TV",
+    Brand: pdfValueAfterLabel(text, ["PRODUCT", "Brand"]),
+    "Channel Name": pdfValueAfterLabel(text, ["CHANNEL", "Channel Name"]),
+    "Campaign Name": pdfValueAfterLabel(text, ["CATEGORY", "Campaign Name"]),
+  };
+  const tokens = pdfLines(text).filter((line) => ![
+    "sr no", "program", "start time", "program date", "duration", "advertise start", "time", "brk", "language", "a pos", "caption", "spot id",
+  ].includes(line.toLowerCase()));
+  const rows = [];
+  for (let index = 0; index + 10 < tokens.length; index += 1) {
+    const chunk = tokens.slice(index, index + 11);
+    if (!/^\d+$/.test(chunk[0]) || !pdfIsTime(chunk[2]) || !pdfIsDate(chunk[3]) || !/^\d{1,3}$/.test(chunk[4]) || !pdfIsTime(chunk[5])) continue;
+    rows.push({
+      ...makePdfReviewRow("thirdPartyMonitoring", fileName, "Extracted - review"),
+      ...header,
+      Program: chunk[1],
+      Date: chunk[3],
+      "Air Time": chunk[5],
+      "Duration Sec": chunk[4],
+      "Spot Copy Caption": chunk[9],
+      "Proof of Performance": "PDF monitoring proof",
+      "Expense Monitoring": "Verified from monitoring PDF",
+      "Monitoring Status": "Aired",
+    });
+    index += 10;
+  }
+  if (rows.length) return rows;
+  return [{ ...makePdfReviewRow("thirdPartyMonitoring", fileName, "Header extracted - review"), ...header }];
+}
+
+function pdfLines(text) {
+  return String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function pdfValueAfterLabel(text, labels, maxChars = 160) {
+  for (const label of labels) {
+    const match = String(text || "").match(new RegExp(`${escapeRegExp(label)}\\s*:?\\s*(.+)`, "i"));
+    if (match) return pdfTrimValue(match[1], maxChars);
+  }
+  return "";
+}
+
+function pdfMoneyAfterLabel(text, labels) {
+  for (const label of labels) {
+    const match = String(text || "").match(new RegExp(`${escapeRegExp(label)}\\s*:?\\s*([-\\d,]+(?:\\.\\d+)?)`, "i"));
+    if (match) return normalizePdfMoney(match[1]);
+  }
+  return "";
+}
+
+function pdfFirstMatch(text, regex) {
+  const match = String(text || "").match(regex);
+  return match ? pdfTrimValue(match[1]) : "";
+}
+
+function pdfValueNear(text, start, end) {
+  const match = String(text || "").match(new RegExp(`${escapeRegExp(start)}.*?\\n(.+?)\\n.*?${escapeRegExp(end)}`, "is"));
+  return match ? pdfTrimValue(match[1]) : "";
+}
+
+function pdfMultilineValueAfterLabel(text, label, stopLabels = []) {
+  const stop = stopLabels.length ? `\\n(?:${stopLabels.map(escapeRegExp).join("|")})\\b` : "$";
+  const match = String(text || "").match(new RegExp(`${escapeRegExp(label)}\\s*:?\\s*\\n(.+?)(?:${stop}|$)`, "is"));
+  return match ? match[1].replace(/\s+/g, " ").trim().replace(/^[:-]+|[:-]+$/g, "") : pdfValueAfterLabel(text, [label]);
+}
+
+function pdfTrimValue(value, maxChars = 160) {
+  return String(value || "").split(/\n/)[0].trim().replace(/^[:-]+|[:-]+$/g, "").replace(/\s{2,}/g, " ").slice(0, maxChars);
+}
+
+function normalizePdfMoney(value) {
+  const clean = String(value || "").trim().replace(/,/g, "");
+  return /^-?\d+(?:\.\d+)?$/.test(clean) ? clean : "";
+}
+
+function pdfIsMoney(value) {
+  return /^\d[\d,]*(?:\.\d+)?$/.test(String(value || "").trim());
+}
+
+function pdfIsDate(value) {
+  return /^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(String(value || "").trim());
+}
+
+function pdfIsTime(value) {
+  return /^\d{1,2}:\d{2}(?::\d{2})?$/.test(String(value || "").trim());
+}
+
+function pdfLooksLikeDateFragment(value) {
+  return /\d{1,2}\s*\(\d+\)/.test(value) || /^\(\d+\)/.test(String(value || "").trim());
+}
+
+function splitAgencyPdfPrefix(raw, dateStart) {
+  if (dateStart < 3) return ["", "", ""];
+  if (dateStart >= 4 && /\b(PVT|PRIVATE|LIMITED|LTD)\b/i.test(raw[dateStart - 2])) {
+    return [raw[dateStart - 4], raw[dateStart - 3], raw.slice(dateStart - 2, dateStart).join(" ")];
+  }
+  return [raw[dateStart - 3], raw[dateStart - 2], raw[dateStart - 1]];
+}
+
+function calculatePdfAmount(duration, rate, spots = 1) {
+  const durationValue = Number(duration || 0);
+  const rateValue = Number(String(rate || "0").replace(/,/g, ""));
+  const amount = spots * durationValue / 10 * rateValue;
+  return Number.isFinite(amount) && amount ? amount.toFixed(2) : "";
+}
+
+function pdfSourceProof(sourceKey, text) {
+  const labels = {
+    po: ["PO No", "Order date", "Vendor", "TOTAL AMOUNT INCL.TAX"],
+    mediaSchedule: ["PO Number", "Campaign Name", "Channel", "Planned Amount"],
+    agency: ["Invoice Number", "Invoice Date", "Estimate Number", "Client PO Number", "Annexure-1"],
+    thirdPartyInvoice: ["Invoice No", "Invoice Date", "TELECAST CERTIFICATE", "Payable Amount"],
+    thirdPartyMonitoring: ["PRODUCT", "CHANNEL", "PERIOD", "SPOT ID"],
+  }[sourceKey] || [];
+  const allLines = pdfLines(text);
+  for (const label of labels) {
+    const index = allLines.findIndex((line) => line.toLowerCase().includes(label.toLowerCase()));
+    if (index >= 0) return allLines.slice(index, index + 3).join(" | ").slice(0, 260);
+  }
+  return pdfTrimValue(text, 220);
+}
+
+function pdfParserConfidence(sourceKey, rows) {
+  const required = {
+    po: ["PO Number", "PO Date", "Agency Name", "PO Amount Incl Tax"],
+    mediaSchedule: ["Date", "Channel Name", "Program", "Planned Amount"],
+    agency: ["Invoice Number", "Invoice Date", "PO Number", "Channel Name", "Net Cost"],
+    thirdPartyInvoice: ["Invoice Number", "Invoice Date", "Date", "Air Time", "Duration Sec"],
+    thirdPartyMonitoring: ["Channel Name", "Program", "Date", "Air Time", "Duration Sec"],
+  }[sourceKey] || [];
+  let filled = 0;
+  let total = 0;
+  rows.forEach((row) => {
+    required.forEach((field) => {
+      total += 1;
+      if (row[field]) filled += 1;
+    });
+  });
+  const ratio = total ? filled / total : 0;
+  if (ratio >= 0.85) return "High";
+  if (ratio >= 0.6) return "Medium";
+  return "Low";
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function firstDatasetWithRows(datasets) {
+  return Object.keys(SOURCE_CONFIG).find((sourceKey) => datasets?.[sourceKey]?.length) || "";
 }
 
 function parseDelimitedRows(text, delimiter) {
@@ -997,7 +1428,7 @@ function loadSample() {
   state.globalFilters = {};
   state.searchQuery = "";
   $("#table-search").value = "";
-  state.activeView = "reconciliation";
+  state.activeView = "agency";
   if (!$("#campaign-name").value.trim()) $("#campaign-name").value = "TAG-mPRO Reconciliation Sample";
   state.dirty = true;
   renderAll();
@@ -1063,6 +1494,7 @@ function exportCsv() {
 }
 
 function renderAll() {
+  applyQualityAnnotations();
   renderTabs();
   renderSummary();
   renderGlobalFilters();
@@ -1079,17 +1511,176 @@ function renderTabs() {
 function renderSummary() {
   const summary = $("#source-summary");
   const reconciliationRows = buildReconciliationRows();
+  const totalSourceRows = Object.values(state.datasets).reduce((total, rows) => total + rows.length, 0);
+  if (!totalSourceRows) {
+    summary.innerHTML = "";
+    summary.classList.add("hidden");
+    return;
+  }
+  summary.classList.remove("hidden");
   const cards = [
-    ["Programs", state.datasets.program.length],
+    ["Campaign", state.datasets.program.length],
     ["PR", state.datasets.pr.length],
     ["PO", state.datasets.po.length],
-    ["Schedule", state.datasets.mediaSchedule.length],
+    ["Media Schedule", state.datasets.mediaSchedule.length],
     ["Agency", state.datasets.agency.length],
-    ["3rd Party", state.datasets.thirdPartyInvoice.length],
+    ["Publisher", state.datasets.thirdPartyInvoice.length],
     ["Monitoring", state.datasets.thirdPartyMonitoring.length],
-    ["Review Items", reconciliationRows.filter((row) => row["Reconciliation Status"] !== "Matched").length],
+    ["Reco Review", reconciliationRows.filter((row) => row["Reconciliation Status"] !== "Matched").length],
   ];
-  summary.innerHTML = cards.map(([label, count]) => `<div><strong>${count}</strong><span>${label}</span></div>`).join("");
+  summary.innerHTML = cards.map(([label, count]) => `<div class="summary-card"><strong>${count}</strong><span>${label}</span></div>`).join("");
+}
+
+function applyQualityAnnotations() {
+  Object.keys(QUALITY_REQUIRED_FIELDS).forEach((sourceKey) => {
+    (state.datasets[sourceKey] || []).forEach((row) => {
+      const issues = qualityIssuesForRow(sourceKey, row);
+      row["Quality Issues"] = issues.join("; ");
+      if (issues.length) {
+        row.Status = "Needs Review";
+      } else if (/extracted/i.test(row.Status || "")) {
+        row.Status = "Review ready";
+      }
+    });
+  });
+  annotateDuplicateQualityIssues("agency", "invoiceNumber", "Duplicate agency invoice number");
+  annotateDuplicateQualityIssues("thirdPartyInvoice", "invoiceNumber", "Duplicate publisher invoice number");
+  annotateDuplicateQualityIssues("po", "poNumber", "Duplicate PO number");
+}
+
+function buildQualityReport() {
+  const rows = Object.keys(QUALITY_REQUIRED_FIELDS).flatMap((sourceKey) => {
+    return (state.datasets[sourceKey] || []).map((row) => ({ sourceKey, row, issues: qualityIssuesForRow(sourceKey, row) }));
+  });
+  rows.forEach(({ sourceKey, row, issues }) => {
+    if (isDuplicateValue(sourceKey, row, sourceKey === "po" ? "poNumber" : "invoiceNumber")) {
+      issues.push(sourceKey === "po" ? "Duplicate PO number" : "Duplicate invoice number");
+    }
+  });
+
+  let totalChecks = 0;
+  let passedChecks = 0;
+  let missingFields = 0;
+  let formulaIssues = 0;
+  let duplicateIssues = 0;
+  const issueCounts = new Map();
+
+  rows.forEach(({ sourceKey, row, issues }) => {
+    const required = QUALITY_REQUIRED_FIELDS[sourceKey] || [];
+    const missing = required.filter((fieldKey) => !readField(row, fieldKey));
+    totalChecks += required.length;
+    passedChecks += required.length - missing.length;
+    missingFields += missing.length;
+    issues.forEach((issue) => {
+      issueCounts.set(issue, (issueCounts.get(issue) || 0) + 1);
+      if (/formula|amount mismatch/i.test(issue)) formulaIssues += 1;
+      if (/duplicate/i.test(issue)) duplicateIssues += 1;
+    });
+    const formulaCheck = hasFormulaInputs(sourceKey, row);
+    if (formulaCheck) {
+      totalChecks += 1;
+      if (!issues.some((issue) => /formula|amount mismatch/i.test(issue))) passedChecks += 1;
+    }
+  });
+
+  const topIssues = [...issueCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 7)
+    .map(([issue, count]) => `${count} row${count === 1 ? "" : "s"}: ${issue}`);
+
+  return {
+    totalRows: rows.length,
+    accuracy: totalChecks ? Math.round((passedChecks / totalChecks) * 100) : 0,
+    rowsWithIssues: rows.filter(({ issues }) => issues.length).length,
+    missingFields,
+    formulaIssues,
+    duplicateIssues,
+    aiChecked: rows.filter(({ row }) => /matched|mismatch|review/i.test(row["AI Audit Status"] || "")).length,
+    topIssues,
+  };
+}
+
+function qualityIssuesForRow(sourceKey, row) {
+  const issues = [];
+  const required = QUALITY_REQUIRED_FIELDS[sourceKey] || [];
+  const missing = required.filter((fieldKey) => !readField(row, fieldKey)).map((fieldKey) => QUALITY_LABELS[fieldKey] || toTitle(fieldKey));
+  if (missing.length) issues.push(`Missing ${missing.slice(0, 4).join(", ")}${missing.length > 4 ? ` +${missing.length - 4} more` : ""}`);
+
+  const formulaIssue = formulaIssueForRow(sourceKey, row);
+  if (formulaIssue) issues.push(formulaIssue);
+
+  const dateIssue = dateIssueForRow(sourceKey, row);
+  if (dateIssue) issues.push(dateIssue);
+
+  return issues;
+}
+
+function formulaIssueForRow(sourceKey, row) {
+  if (sourceKey === "agency") {
+    const spots = parseNumber(readField(row, "spots"));
+    const duration = parseNumber(readField(row, "duration"));
+    const rate = parseNumber(readField(row, "rate"));
+    const amount = parseNumber(readField(row, "amount"));
+    if ([spots, duration, rate, amount].some(Number.isNaN)) return "";
+    const expected = spots * (duration / 10) * rate;
+    return amountMismatch(expected, amount) ? `Net Cost formula mismatch; expected ${formatAmount(expected)}` : "";
+  }
+  if (sourceKey === "thirdPartyInvoice") {
+    const duration = parseNumber(readField(row, "duration"));
+    const rate = parseNumber(readField(row, "rate"));
+    const spots = parseNumber(readField(row, "spots")) || 1;
+    const amount = parseNumber(readField(row, "amount"));
+    if ([duration, rate, amount].some(Number.isNaN)) return "";
+    const expected = spots * (duration / 10) * rate;
+    return amountMismatch(expected, amount) ? `Final amount formula mismatch; expected ${formatAmount(expected)}` : "";
+  }
+  if (sourceKey === "mediaSchedule") {
+    const spots = parseNumber(readField(row, "spots"));
+    const duration = parseNumber(readField(row, "duration"));
+    const rate = parseNumber(readField(row, "rate"));
+    const amount = parseNumber(readField(row, "plannedAmount"));
+    if ([spots, duration, rate, amount].some(Number.isNaN)) return "";
+    const expected = spots * (duration / 10) * rate;
+    return amountMismatch(expected, amount) ? `Planned amount formula mismatch; expected ${formatAmount(expected)}` : "";
+  }
+  return "";
+}
+
+function dateIssueForRow(sourceKey, row) {
+  const dateValue = readField(row, "date") || readField(row, "invoiceDate") || readField(row, "poDate");
+  if (!dateValue || parseLooseDate(dateValue)) return "";
+  if (/\d+\(\d+\)/.test(dateValue)) return "";
+  return "Date format needs review";
+}
+
+function hasFormulaInputs(sourceKey, row) {
+  if (sourceKey === "agency") return ["spots", "duration", "rate", "amount"].every((key) => readField(row, key));
+  if (sourceKey === "thirdPartyInvoice") return ["duration", "rate", "amount"].every((key) => readField(row, key));
+  if (sourceKey === "mediaSchedule") return ["spots", "duration", "rate", "plannedAmount"].every((key) => readField(row, key));
+  return false;
+}
+
+function amountMismatch(expected, actual) {
+  if (!Number.isFinite(expected) || !Number.isFinite(actual)) return false;
+  return Math.abs(expected - actual) > Math.max(1, Math.abs(expected) * 0.02);
+}
+
+function annotateDuplicateQualityIssues(sourceKey, fieldKey, message) {
+  const rows = state.datasets[sourceKey] || [];
+  rows.forEach((row) => {
+    if (!isDuplicateValue(sourceKey, row, fieldKey)) return;
+    const issues = new Set(String(row["Quality Issues"] || "").split(";").map((item) => item.trim()).filter(Boolean));
+    issues.add(message);
+    row["Quality Issues"] = Array.from(issues).join("; ");
+    row.Status = "Needs Review";
+  });
+}
+
+function isDuplicateValue(sourceKey, row, fieldKey) {
+  const value = readField(row, fieldKey);
+  if (!value) return false;
+  const rows = state.datasets[sourceKey] || [];
+  return rows.filter((item) => readField(item, fieldKey) === value).length > 1;
 }
 
 function showUploadHelp(key) {
@@ -1154,14 +1745,18 @@ function renderAccountingFilters() {
     label.textContent = def.label;
     const select = document.createElement("select");
     select.dataset.accountFilter = def.key;
+    select.multiple = true;
+    select.size = 1;
+    select.title = "Use Ctrl or Shift to select multiple values.";
     const values = uniqueValues(rows.map((row) => readField(row, def.key))).filter(Boolean);
     if (!values.length) {
       select.innerHTML = `<option value="">Column not found yet</option>`;
       select.disabled = true;
     } else {
       select.innerHTML = `<option value="">All</option>${values.map((value) => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("")}`;
-      select.value = values.includes(state.accountingFilters[def.key]) ? state.accountingFilters[def.key] : "";
-      if (!select.value) delete state.accountingFilters[def.key];
+      applySelectValues(select, values, state.accountingFilters[def.key]);
+      state.accountingFilters[def.key] = normalizeFilterValues(state.accountingFilters[def.key]).filter((value) => values.includes(value));
+      if (!state.accountingFilters[def.key].length) delete state.accountingFilters[def.key];
     }
     select.addEventListener("change", handleAccountingFilter);
     label.appendChild(select);
@@ -1175,10 +1770,10 @@ function renderFilterChips() {
   if (!chipBar) return;
   const chips = [];
   Object.entries(state.globalFilters).forEach(([key, value]) => {
-    if (value) chips.push({ type: "global", key, label: toTitle(key), value });
+    normalizeFilterValues(value).forEach((item) => chips.push({ type: "global", key, label: toTitle(key), value: item }));
   });
   Object.entries(state.accountingFilters).forEach(([key, value]) => {
-    if (value) chips.push({ type: "accounting", key, label: toTitle(key), value });
+    normalizeFilterValues(value).forEach((item) => chips.push({ type: "accounting", key, label: toTitle(key), value: item }));
   });
   if (state.searchQuery) chips.push({ type: "search", key: "search", label: "Search", value: state.searchQuery });
 
@@ -1189,12 +1784,12 @@ function renderFilterChips() {
   }
 
   chipBar.innerHTML = chips.map((chip) => (
-    `<button class="filter-chip" type="button" data-filter-type="${chip.type}" data-filter-key="${chip.key}">
+    `<button class="filter-chip" type="button" data-filter-type="${chip.type}" data-filter-key="${chip.key}" data-filter-value="${escapeHTML(chip.value)}">
       <span>${escapeHTML(chip.label)}: ${escapeHTML(chip.value)}</span><b>x</b>
     </button>`
   )).join("");
   chipBar.querySelectorAll(".filter-chip").forEach((button) => {
-    button.addEventListener("click", () => clearFilterChip(button.dataset.filterType, button.dataset.filterKey));
+    button.addEventListener("click", () => clearFilterChip(button.dataset.filterType, button.dataset.filterKey, button.dataset.filterValue));
   });
   updateGlobalFilterCount();
 }
@@ -1202,16 +1797,18 @@ function renderFilterChips() {
 function updateGlobalFilterCount() {
   const counter = $("#global-filter-count");
   if (!counter) return;
-  const count = Object.values(state.globalFilters).filter(Boolean).length;
+  const count = Object.values(state.globalFilters).reduce((total, value) => total + normalizeFilterValues(value).length, 0);
   counter.textContent = count ? `${count} active` : "All records";
 }
 
-function clearFilterChip(type, key) {
+function clearFilterChip(type, key, value = "") {
   if (type === "global") {
-    delete state.globalFilters[key];
+    state.globalFilters[key] = normalizeFilterValues(state.globalFilters[key]).filter((item) => item !== value);
+    if (!state.globalFilters[key].length) delete state.globalFilters[key];
     localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
   } else if (type === "accounting") {
-    delete state.accountingFilters[key];
+    state.accountingFilters[key] = normalizeFilterValues(state.accountingFilters[key]).filter((item) => item !== value);
+    if (!state.accountingFilters[key].length) delete state.accountingFilters[key];
     localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
   } else if (type === "search") {
     state.searchQuery = "";
@@ -1222,15 +1819,19 @@ function clearFilterChip(type, key) {
 
 function fillSelectFromRows(select, rows, key, current) {
   const values = uniqueValues(rows.map((row) => readField(row, key))).filter(Boolean);
+  select.multiple = true;
+  select.size = 1;
+  select.title = "Use Ctrl or Shift to select multiple values.";
   select.innerHTML = `<option value="">All</option>${values.map((value) => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("")}`;
-  select.value = values.includes(current) ? current : "";
-  if (!select.value) delete state.globalFilters[key];
+  applySelectValues(select, values, current);
+  state.globalFilters[key] = normalizeFilterValues(current).filter((value) => values.includes(value));
+  if (!state.globalFilters[key].length) delete state.globalFilters[key];
 }
 
 function handleGlobalFilter(event) {
   const key = event.target.dataset.globalFilter;
-  state.globalFilters[key] = event.target.value;
-  if (!state.globalFilters[key]) delete state.globalFilters[key];
+  state.globalFilters[key] = selectedValuesFromSelect(event.target);
+  if (!state.globalFilters[key].length) delete state.globalFilters[key];
   localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
   renderFilterChips();
   renderGrid();
@@ -1243,8 +1844,9 @@ function resetGlobalFilters() {
 }
 
 function handleAccountingFilter(event) {
-  state.accountingFilters[event.target.dataset.accountFilter] = event.target.value;
-  if (!state.accountingFilters[event.target.dataset.accountFilter]) delete state.accountingFilters[event.target.dataset.accountFilter];
+  const key = event.target.dataset.accountFilter;
+  state.accountingFilters[key] = selectedValuesFromSelect(event.target);
+  if (!state.accountingFilters[key].length) delete state.accountingFilters[key];
   localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
   renderFilterChips();
   renderGrid();
@@ -1256,6 +1858,25 @@ function clearAccountingFilters() {
   renderAccountingFilters();
   renderFilterChips();
   renderGrid();
+}
+
+function normalizeFilterValues(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  const clean = String(value || "").trim();
+  return clean ? [clean] : [];
+}
+
+function selectedValuesFromSelect(select) {
+  return Array.from(select.selectedOptions || [])
+    .map((option) => option.value)
+    .filter(Boolean);
+}
+
+function applySelectValues(select, allowedValues, current) {
+  const selected = normalizeFilterValues(current).filter((value) => allowedValues.includes(value));
+  Array.from(select.options).forEach((option) => {
+    option.selected = option.value ? selected.includes(option.value) : !selected.length;
+  });
 }
 
 function renderGrid() {
@@ -1363,15 +1984,15 @@ function getActiveColumns(rows, options = {}) {
       "Program Budget",
       "PR Amount",
       "PO Amount Incl Tax",
-      "Media Schedule Amount",
+      "Media Estimate/Schedule Amount",
       "Agency Total Value",
-      "3rd Party Invoice Amount",
+      "Publisher Invoice Amount",
       "Proof of Performance",
       "Expense Monitoring",
       "Program Budget Balance",
       "PR Budget Balance",
       "Agency Rows",
-      "3rd Party Invoice Rows",
+      "Publisher Invoice Rows",
       "Monitoring Rows",
     ];
   } else if (SOURCE_CONFIG[state.activeView]) {
@@ -1488,13 +2109,13 @@ function buildReconciliationRows() {
     if (!poRows.length) issues.push("PO missing");
     if (!scheduleRows.length) issues.push("Media schedule missing");
     if (!agencyRows.length) issues.push("Agency invoice missing");
-    if (!thirdPartyRows.length) issues.push("3rd party invoice missing");
+    if (!thirdPartyRows.length) issues.push("Publisher invoice missing");
     if (thirdPartyRows.length && !monitoringRows.length) issues.push("Monitoring missing");
     if (programBudget && prAmount && prAmount > programBudget) issues.push("PR amount exceeds program budget");
     if (prAmount && poAmount && poAmount > prAmount) issues.push("PO amount exceeds PR amount");
     if (poAmount && agencyAmount && Math.abs(poAmount - agencyAmount) > 1) issues.push("PO vs agency amount mismatch");
-    if (scheduleAmount && thirdPartyAmount && Math.abs(scheduleAmount - thirdPartyAmount) > Math.max(1, scheduleAmount * 0.02)) issues.push("Schedule vs 3rd party invoice amount review");
-    if (agencyAmount && thirdPartyAmount && Math.abs(agencyAmount - thirdPartyAmount) > Math.max(1, agencyAmount * 0.02)) issues.push("Agency vs 3rd party invoice amount review");
+    if (scheduleAmount && thirdPartyAmount && Math.abs(scheduleAmount - thirdPartyAmount) > Math.max(1, scheduleAmount * 0.02)) issues.push("Schedule vs publisher invoice amount review");
+    if (agencyAmount && thirdPartyAmount && Math.abs(agencyAmount - thirdPartyAmount) > Math.max(1, agencyAmount * 0.02)) issues.push("Agency vs publisher invoice amount review");
 
     return {
       "Reconciliation Status": issues.length ? "Needs Review" : "Matched",
@@ -1512,15 +2133,15 @@ function buildReconciliationRows() {
       "Program Budget": programBudget ? String(programBudget) : "",
       "PR Amount": prAmount ? String(prAmount) : "",
       "PO Amount Incl Tax": poAmount ? String(poAmount) : "",
-      "Media Schedule Amount": scheduleAmount ? String(scheduleAmount) : "",
+      "Media Estimate/Schedule Amount": scheduleAmount ? String(scheduleAmount) : "",
       "Agency Total Value": agencyAmount ? String(agencyAmount) : "",
-      "3rd Party Invoice Amount": thirdPartyAmount ? String(thirdPartyAmount) : "",
+      "Publisher Invoice Amount": thirdPartyAmount ? String(thirdPartyAmount) : "",
       "Proof of Performance": readField(monitoringRows[0] || first, "proofOfPerformance"),
       "Expense Monitoring": readField(monitoringRows[0] || first, "expenseMonitoring"),
       "Program Budget Balance": programBudget ? String(programBudget - prAmount) : "",
       "PR Budget Balance": prAmount ? String(prAmount - poAmount) : "",
       "Agency Rows": String(agencyRows.length),
-      "3rd Party Invoice Rows": String(thirdPartyRows.length),
+      "Publisher Invoice Rows": String(thirdPartyRows.length),
       "Monitoring Rows": String(monitoringRows.length),
       Source: "Reconciliation",
       Status: issues.length ? "Needs Review" : "Matched",
@@ -1549,11 +2170,18 @@ function deleteRow(rowId) {
 }
 
 function matchesGlobalFilters(row) {
-  return Object.entries(state.globalFilters).every(([key, selected]) => !selected || readField(row, key).toLowerCase() === selected.toLowerCase());
+  return Object.entries(state.globalFilters).every(([key, selected]) => matchesAnySelectedValue(row, key, selected));
 }
 
 function matchesAccountingFilters(row) {
-  return Object.entries(state.accountingFilters).every(([key, selected]) => !selected || readField(row, key).toLowerCase() === selected.toLowerCase());
+  return Object.entries(state.accountingFilters).every(([key, selected]) => matchesAnySelectedValue(row, key, selected));
+}
+
+function matchesAnySelectedValue(row, key, selected) {
+  const values = normalizeFilterValues(selected);
+  if (!values.length) return true;
+  const actual = readField(row, key).toLowerCase();
+  return values.some((value) => actual === value.toLowerCase());
 }
 
 function makeHeaderCell(text, className) {
@@ -1697,6 +2325,26 @@ function parseNumber(value) {
   return clean ? Number(clean) : Number.NaN;
 }
 
+function formatAmount(value) {
+  return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+function parseLooseDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const normalized = text.replace(/\bSept\b/i, "Sep").replace(/\./g, "-");
+  const date = new Date(normalized);
+  if (!Number.isNaN(date.getTime())) return date;
+  const match = normalized.match(/^(\d{1,2})[-/ ]([A-Za-z]{3,})[-/ ](\d{2,4})$/);
+  if (!match) return null;
+  const [, day, monthName, yearText] = match;
+  const month = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(monthName.slice(0, 3).toLowerCase());
+  if (month < 0) return null;
+  const year = Number(yearText.length === 2 ? `20${yearText}` : yearText);
+  const parsed = new Date(year, month, Number(day));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function uniqueValues(values) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
@@ -1769,7 +2417,7 @@ async function saveCaseToApi(caseItem) {
   }
 }
 
-async function postApi(path, payload) {
+async function postApi(path, payload, timeoutMs = 2500) {
   try {
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     const response = await fetchWithTimeout(
@@ -1779,7 +2427,7 @@ async function postApi(path, payload) {
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(payload),
       },
-      2500,
+      timeoutMs,
     );
     const data = await response.json().catch(() => ({}));
     apiOnline = response.ok;

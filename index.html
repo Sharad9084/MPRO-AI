@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TAG-mPRO Reconciliation</title>
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+    <script type="module">
+      import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs";
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs";
+      window.pdfjsLib = pdfjsLib;
+    </script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -14,7 +18,7 @@
         <img class="hero-dashboard-image" src="dashboard-hero.svg" alt="Marketing reconciliation dashboard preview" />
       </section>
       <section class="entry-content">
-        <div class="powered">Powered by <strong>TAG-mPRO</strong></div>
+        <div class="powered">Powered by <strong>TAGMA Consulting</strong></div>
         <div class="shield-mark">TAG-mPRO</div>
         <p class="welcome">Welcome to</p>
         <h1>Marketing Performance Reconciliation and Optimisation</h1>
@@ -118,34 +122,12 @@
           <button id="signout-button" class="ghost-action" type="button">Sign off</button>
         </div>
       </header>
-
-      <section class="global-filterbar compact-filterbar" aria-label="Global filters">
-        <button class="filter-trigger" type="button" aria-label="Open global filters">
-          <span>Filters</span>
-          <small id="global-filter-count">All records</small>
-        </button>
-        <div class="global-filter-panel" role="group" aria-label="Global filter controls">
-          <div class="global-filter-grid">
-            <label>Advertiser<select data-global-filter="advertiser"></select></label>
-            <label>Agency<select data-global-filter="agency"></select></label>
-            <label>Brand<select data-global-filter="brand"></select></label>
-            <label>Campaign<select data-global-filter="campaign"></select></label>
-            <label>Campaign Type<select data-global-filter="campaignType"></select></label>
-            <label>Campaign Manager<select data-global-filter="campaignManager"></select></label>
-            <label>Program Name<select data-global-filter="programName"></select></label>
-            <label>Budget<select data-global-filter="budget"></select></label>
-            <label>PR Number<select data-global-filter="prNumber"></select></label>
-            <label>PO Number<select data-global-filter="poNumber"></select></label>
-            <label>Invoice<select data-global-filter="invoiceNumber"></select></label>
-            <label>Invoice Date<select data-global-filter="invoiceDate"></select></label>
-            <label>Proof of Performance<select data-global-filter="proofOfPerformance"></select></label>
-            <label>Expense Monitoring<select data-global-filter="expenseMonitoring"></select></label>
-            <label>Vendor<select data-global-filter="vendor"></select></label>
-            <label>Channel<select data-global-filter="channel"></select></label>
-            <label>Status<select data-global-filter="status"></select></label>
-          </div>
-          <button id="reset-global-filters" class="ghost-action" type="button">Reset</button>
-        </div>
+      <section class="global-filter-nav" aria-label="Global filters">
+        <label>Campaign<select data-global-filter="campaign"></select></label>
+        <label>Agency<select data-global-filter="agency"></select></label>
+        <label>Medium<select data-global-filter="mediaType"></select></label>
+        <label>Platform<select data-global-filter="channel"></select></label>
+        <button id="reset-global-filters" class="nav-filter-reset" type="button" title="Reset filters">Reset</button>
       </section>
 
       <main class="workspace">
@@ -156,7 +138,6 @@
               <h2>Accounting Filters</h2>
               <button id="collapse-filters" class="icon-button" type="button" title="Collapse filters">&lt;</button>
             </div>
-            <p class="filter-note">Filters are generated automatically from uploaded data.</p>
             <form id="accounting-filter-form" class="filter-form"></form>
             <button id="clear-accounting-filters" class="ghost-action full" type="button">Clear Filters</button>
           </aside>
@@ -164,77 +145,45 @@
           <button id="expand-filters" class="filter-rail hidden" type="button">Filters</button>
 
           <section class="table-zone">
-            <header class="workspace-head">
-              <div>
-                <p class="eyebrow">Accounting Workspace</p>
-                <h1>Reconciliation Control Center</h1>
-                <span>Review campaign spend, source files, exceptions, and saved cases from one CRM-style workspace.</span>
-              </div>
-              <div class="workspace-actions">
-                <button id="load-sample" class="ghost-action" type="button">Load sample</button>
-                <button id="export-csv" class="ghost-action" type="button">Export CSV</button>
-                <button id="save-campaign" class="danger-action compact" type="button">Save</button>
-              </div>
-            </header>
-            <div id="campaign-choice" class="campaign-choice">
-              <button id="new-campaign-button" class="choice-button" type="button">
-                <span>New Reconciliation</span>
-                <small>Upload PO, media schedule, agency and 3rd party files</small>
-              </button>
-              <button id="existing-campaign-button" class="choice-button" type="button">
-                <span>Existing Reconciliation</span>
-                <small>Continue saved work</small>
-              </button>
-            </div>
+            <div id="campaign-choice" class="campaign-choice hidden"></div>
 
-            <div id="campaign-panel" class="campaign-panel hidden">
-              <div class="campaign-toolbar">
-                <div class="campaign-title-block">
-                  <label>Workspace name<input id="campaign-name" type="text" placeholder="Auditor invoice review" /></label>
-                </div>
-                <div class="toolbar-actions">
-                  <button id="add-row" class="ghost-action" type="button">Add row</button>
-                  <button id="column-settings" class="ghost-action" type="button">Columns</button>
-                </div>
-              </div>
+            <div id="campaign-panel" class="campaign-panel">
+              <input id="campaign-name" type="hidden" value="Invoice reconciliation" />
               <section class="upload-grid" aria-label="Document uploads">
                 <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">MS</span><strong>Media Schedule</strong><button class="help-dot" type="button" data-help="mediaSchedule" title="Help">?</button></div>
-                  <input id="media-schedule-input" type="file" accept=".xlsx,.xls,.csv,.tsv,.pdf" />
-                  <button class="ghost-action full" type="button" data-import-source="mediaSchedule">Upload</button>
+                  <div class="upload-title"><span class="upload-icon">MS</span><strong>Media Estimate/Schedule</strong><button class="help-dot" type="button" data-help="mediaSchedule" aria-label="Media estimate or schedule help">i<span class="help-tooltip">Upload media estimate or schedule PDF for planned spots, dates, channels and schedule amount.</span></button></div>
+                  <input id="media-schedule-input" type="file" accept=".pdf" multiple />
+                  <button class="ghost-action full" type="button" data-import-source="mediaSchedule">Extract</button>
                 </article>
                 <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">AI</span><strong>Agency Invoice</strong><button class="help-dot" type="button" data-help="agency" title="Help">?</button></div>
-                  <input id="agency-input" type="file" accept=".xlsx,.xls,.csv,.tsv,.pdf" />
-                  <button class="ghost-action full" type="button" data-import-source="agency">Upload</button>
+                  <div class="upload-title"><span class="upload-icon">AI</span><strong>Agency Invoice</strong><button class="help-dot" type="button" data-help="agency" aria-label="Agency invoice help">i<span class="help-tooltip">Upload agency invoice with PO, PR, campaign reference and cost values.</span></button></div>
+                  <input id="agency-input" type="file" accept=".pdf" multiple />
+                  <button class="ghost-action full" type="button" data-import-source="agency">Extract</button>
                 </article>
                 <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">3I</span><strong>3rd Party Invoice</strong><button class="help-dot" type="button" data-help="thirdPartyInvoice" title="Help">?</button></div>
-                  <input id="third-party-invoice-input" type="file" accept=".xlsx,.xls,.csv,.tsv,.pdf" multiple />
-                  <button class="ghost-action full" type="button" data-import-source="thirdPartyInvoice">Upload</button>
+                  <div class="upload-title"><span class="upload-icon">PI</span><strong>Publisher Invoice</strong><button class="help-dot" type="button" data-help="thirdPartyInvoice" aria-label="Publisher invoice help">i<span class="help-tooltip">Upload broadcaster, publisher, platform or vendor invoice files.</span></button></div>
+                  <input id="third-party-invoice-input" type="file" accept=".pdf" multiple />
+                  <button class="ghost-action full" type="button" data-import-source="thirdPartyInvoice">Extract</button>
                 </article>
                 <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">MR</span><strong>3rd Party Monitoring</strong><button class="help-dot" type="button" data-help="thirdPartyMonitoring" title="Help">?</button></div>
-                  <input id="third-party-monitoring-input" type="file" accept=".xlsx,.xls,.csv,.tsv,.pdf" multiple />
-                  <button class="ghost-action full" type="button" data-import-source="thirdPartyMonitoring">Upload</button>
+                  <div class="upload-title"><span class="upload-icon">MR</span><strong>3rd Party Monitoring</strong><button class="help-dot" type="button" data-help="thirdPartyMonitoring" aria-label="Monitoring help">i<span class="help-tooltip">Upload AdEx, BARC, tear sheet, DCM or platform monitoring proof.</span></button></div>
+                  <input id="third-party-monitoring-input" type="file" accept=".pdf" multiple />
+                  <button class="ghost-action full" type="button" data-import-source="thirdPartyMonitoring">Extract</button>
                 </article>
                 <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">PO</span><strong>Purchase Order</strong><button class="help-dot" type="button" data-help="po" title="Help">?</button></div>
-                  <input id="po-input" type="file" accept=".xlsx,.xls,.csv,.tsv,.pdf" />
-                  <button class="ghost-action full" type="button" data-import-source="po">Upload</button>
+                  <div class="upload-title"><span class="upload-icon">PO</span><strong>Purchase Order</strong><button class="help-dot" type="button" data-help="po" aria-label="Purchase order help">i<span class="help-tooltip">Upload purchase order extract or PO PDF with PR and amount references.</span></button></div>
+                  <input id="po-input" type="file" accept=".pdf" multiple />
+                  <button class="ghost-action full" type="button" data-import-source="po">Extract</button>
                 </article>
               </section>
 
               <section class="source-tabs" aria-label="Accounting data tabs">
-                <button class="source-tab" type="button" data-view="program">Program / Campaign</button>
-                <button class="source-tab" type="button" data-view="pr">PR</button>
-                <button class="source-tab" type="button" data-view="po">PO</button>
-                <button class="source-tab" type="button" data-view="mediaSchedule">Media Schedule</button>
-                <button class="source-tab" type="button" data-view="agency">Agency Invoice</button>
-                <button class="source-tab" type="button" data-view="thirdPartyInvoice">3rd Party Invoice</button>
-                <button class="source-tab" type="button" data-view="thirdPartyMonitoring">3rd Party Monitoring</button>
-                <button class="source-tab active" type="button" data-view="reconciliation">Reconciliation</button>
-                <button class="source-tab" type="button" data-view="combined">Combined</button>
+                <button class="source-tab" type="button" data-view="program">Campaign</button>
+                <button class="source-tab" type="button" data-view="pr">PR - Purchase Requisition</button>
+                <button class="source-tab" type="button" data-view="po">PO - Purchase Order</button>
+                <button class="source-tab" type="button" data-view="mediaSchedule">Media Estimate/Schedule</button>
+                <button class="source-tab active" type="button" data-view="agency">Agency Invoice</button>
+                <button class="source-tab" type="button" data-view="thirdPartyInvoice">Publisher Invoice</button>
               </section>
 
               <section id="source-summary" class="source-summary" aria-label="Source summary"></section>
@@ -243,6 +192,12 @@
               <section class="table-controls" aria-label="Table controls">
                 <label class="search-box">Search records<input id="table-search" type="search" placeholder="Search campaign, PO, vendor, invoice..." /></label>
                 <div id="active-filter-chips" class="filter-chips" aria-label="Active filters"></div>
+                <div class="table-actionbar">
+                  <button id="add-row" class="ghost-action" type="button">Add row</button>
+                  <button id="column-settings" class="ghost-action" type="button">Columns</button>
+                  <button id="export-csv" class="ghost-action" type="button">Export CSV</button>
+                  <button id="save-campaign" class="danger-action compact" type="button">Save</button>
+                </div>
               </section>
               <div class="table-meta">
                 <span id="record-count">0 records</span>

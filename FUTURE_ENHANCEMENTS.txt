@@ -1,0 +1,33 @@
+TAG-mPRO Future Enhancements
+============================
+
+Near-term UI improvements:
+1. Add a polished dashboard overview above the table with campaign health, open exceptions, saved cases, and recent imports.
+2. Replace text-heavy controls with a small icon toolbar for filters, columns, export, save, and row actions.
+3. Add a proper filter drawer with saved views such as Campaign Wise, Agency Wise, Medium Wise, and Platform Wise.
+4. Add responsive table density options: compact, comfortable, and audit review.
+5. Add empty-state screens for each tab that guide the user to upload the correct file type without taking table space.
+6. Replace native multi-select boxes with checkbox dropdowns for faster multi-value filtering on desktop and mobile.
+
+Data and reconciliation improvements:
+1. Add PDF extraction so uploaded invoice and PO PDFs create real table rows instead of placeholder rows.
+2. Add configurable reconciliation rules by campaign type, medium, agency, and publisher.
+3. Add exception assignment, status, comments, and audit trail for each mismatch.
+4. Add duplicate invoice, duplicate PO, date-range mismatch, and rate-card variance checks.
+5. Add downloadable audit report exports in CSV, XLSX, and PDF formats.
+6. Add duplicate-detection controls for continuous imports so users can choose append all, skip exact duplicates, or replace a selected batch.
+7. Add folder watch or cloud-drive sync so new files can be fetched automatically into the same case.
+
+Deployment improvements:
+1. Deploy the frontend and Vercel API functions together.
+2. Connect hosted PostgreSQL using DATABASE_URL or POSTGRES_URL.
+3. Add environment-specific API health checks before sign-in.
+4. Add user roles for Advertiser, Agency, and Auditor with permission-based views.
+5. Add cloud backup and case sharing between users from the same organization.
+
+Future product direction:
+1. Build a larger first dashboard with KPIs, trend cards, pending review items, and quick action shortcuts.
+2. Add campaign-level drilldowns from dashboard to source files and reconciliation findings.
+3. Add AI-assisted column mapping for messy uploaded files.
+4. Add automatic suggestions for resolving common mismatches.
+5. Add approval workflow and final audit sign-off.

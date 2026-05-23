@@ -5,18 +5,16 @@ Project name:
 TAG-mPRO - Marketing Performance Reconciliation and Optimisation
 
 Purpose:
-This application helps an auditor validate marketing campaign spending by uploading multiple business files, converting them into structured tables, and reconciling values across Program, PR, PO, media schedule, agency invoice, third-party invoice, and monitoring data.
+This application helps an auditor validate marketing campaign spending by uploading multiple business files, converting them into structured tables, and reviewing values across Campaign, PR - Purchase Requisition, PO - Purchase Order, Media Estimate/Schedule, Agency Invoice, Publisher Invoice, and supporting monitoring data.
 
 Current application flow:
 1. Entry screen with TAG-mPRO dashboard preview
 2. Role selection screen
 3. Auditor sign in or account creation
-4. Accounting workspace
-5. New or existing reconciliation selection
-6. Compact source-file upload area
-7. CRM-style table workspace with search, view tabs, filter chips, configurable columns, and summary counters
-8. Reconciliation issue review
-9. Save the reconciliation case
+4. Accounting workspace opens directly
+5. Compact source-file upload area
+6. CRM-style table workspace with second-navbar global filters, multi-select collapsible basic filters, search, view tabs, configurable columns, continuous append imports, and table actions
+7. Save or export the reconciliation case
 
 Login:
 Username: auditor@mpro.com
@@ -53,38 +51,54 @@ Roles:
 
 Current UI updates:
 The app now uses English-only interface copy.
+Screen 1 shows Powered by TAGMA Consulting.
 The top navigation uses a darker CRM-style bar.
-Global filters are compact and open as a hover/focus popover instead of permanently taking a full row.
-The accounting workspace has a CRM-style title area, right-side actions, saved-view style tabs, search, active filter chips, summary counters, compact uploads, and a cleaner table.
-Basic global/accounting filters are available for budget, invoice number, PR number, PO number, invoice date, proof of performance, expense monitoring, campaign type, campaign manager, and program name.
+Global filters now live in a second navbar with Campaign, Agency, Medium, and Platform filters.
+Global filters support selecting multiple values in the same filter.
+The signed-in user area shows only the logged-in user identity, such as auditor@mpro.com.
+The accounting workspace opens directly without the New Reconciliation / Existing Reconciliation choice screen.
+Basic accounting filters are available as a collapsible left filter rail so the main table can expand.
+Basic accounting filters support multiple values per filter, so one filter can include several invoice numbers, PR numbers, PO numbers, campaign types, or program names.
+Basic filters include budget, invoice number, PR number, PO number, invoice date, proof of performance, expense monitoring, campaign type, and program name.
+Search, active filter chips, Add row, Columns, Export CSV, and Save now sit on one table action row.
+Load sample is not shown in the table action row.
 The upload area uses tighter source cards with short source icons and reduced vertical space.
+Upload help uses hover/focus info tooltips instead of a plain question mark help button.
+The separate PDF Auto Import card has been removed.
+The five source cards now handle PDF extraction directly: Media Estimate/Schedule, Agency Invoice, Publisher Invoice, 3rd Party Monitoring, and Purchase Order.
+These source cards accept PDF files only in the current UI.
+PDF extraction runs in the browser through PDF.js, so it does not require the local /api/extract_pdf backend route.
+Text-based PDFs can be parsed directly. Scanned/image-only PDFs still need OCR before field extraction can be reliable.
+All upload sources support selecting multiple PDF files at once.
+New PDF uploads append to the existing rows instead of replacing older uploaded data, so the workspace can grow continuously as more files arrive.
+The empty extraction quality dashboard is no longer shown before data import.
 The first screen uses a refreshed dashboard hero illustration.
 The layout is responsive across desktop, tablet, and mobile widths.
 
 Main upload inputs:
-1. Media Schedule
+1. Media Estimate/Schedule
 2. Agency Invoice
-3. 3rd Party Invoice
+3. Publisher Invoice
 4. 3rd Party Monitoring Report
-5. PO
+5. PO - Purchase Order
 
 Logical tables in the app:
-1. Program / Campaign
+1. Campaign
    Top-level campaign data such as budget, campaign ID, campaign name, brand, advertiser, and manager.
 
-2. PR
+2. PR - Purchase Requisition
    Purchase requisition level data. One campaign/program can have multiple PR numbers.
 
-3. PO
+3. PO - Purchase Order
    Purchase order data. One PR can have multiple PO numbers. Total PO amount should not exceed PR amount.
 
-4. Media Schedule
+4. Media Estimate/Schedule
    Planned campaign execution data such as channel, program, date, air time, spots, rate, and planned amount.
 
 5. Agency Invoice
    Agency invoice data with invoice number, invoice date, PO/PR references, campaign, channel, spot, and cost values.
 
-6. 3rd Party Invoice
+6. Publisher Invoice
    External vendor invoice data. For TV this can mean broadcaster invoice, for print publisher invoice, and for other media a third-party vendor invoice.
 
 7. 3rd Party Monitoring Report
@@ -94,8 +108,8 @@ Logical tables in the app:
    Calculated table that compares the above tables and highlights missing data, amount mismatches, monitoring gaps, and budget hierarchy issues.
 
 Important business hierarchy:
-Program/Campaign is the top level.
-One Program/Campaign can have many PR numbers.
+Campaign is the top level.
+One Campaign can have many PR numbers.
 One PR number can have many PO numbers.
 All PR amounts together should stay within the campaign/program budget.
 All PO amounts under a PR should stay within that PR amount.
@@ -103,23 +117,26 @@ All PO amounts under a PR should stay within that PR amount.
 Current reconciliation checks:
 - PR data missing
 - PO missing
-- Media schedule missing
+- Media estimate/schedule missing
 - Agency invoice missing
-- 3rd party invoice missing
+- Publisher invoice missing
 - Monitoring missing
 - PR amount exceeds program budget
 - PO amount exceeds PR amount
 - PO vs agency amount mismatch
-- Schedule vs 3rd party invoice amount review
-- Agency vs 3rd party invoice amount review
+- Schedule vs publisher invoice amount review
+- Agency vs publisher invoice amount review
 
 Table behavior:
 The Columns button lets the user show or hide columns for the active table.
 The grid supports sorting, resizing, and reordering columns.
-Reconciliation and combined views are read-only table views.
+The visible table tabs are Campaign, PR - Purchase Requisition, PO - Purchase Order, Media Estimate/Schedule, Agency Invoice, and Publisher Invoice.
+The 3rd Party Monitoring, Reconciliation, and Combined tabs are hidden from the current visible workspace.
 Source tables remain editable where manual correction is useful.
+Uploaded source rows are append-only during normal import: later uploads are added below earlier uploads for the same source table.
 The search field filters visible rows across table values.
 Active filters appear as removable filter chips.
+Each selected filter value appears as its own chip and can be removed independently.
 Filters are driven by field aliases, so uploaded files can use common variants such as PR No, PO No, Invoice No, Campaign Manager, Program Name, POP, and Expense Monitoring.
 
 Sample files:
