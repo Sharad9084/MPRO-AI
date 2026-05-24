@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   accountingFilters: "mpro.accountingFilters.v3",
   globalFilters: "mpro.globalFilters.v3",
   localUsers: "mpro.localUsers.v1",
+  masterOptions: "mpro.masterOptions.v1",
 };
 
 const LOCAL_API_BASE = "http://127.0.0.1:8787";
@@ -58,10 +59,11 @@ const SOURCE_CONFIG = {
     ],
   },
   po: {
-    label: "PO - Purchase Order",
-    inputId: "po-input",
+    label: "Purchase Order",
     columns: [
       "Source",
+      "Import ID",
+      "Document Type",
       "Campaign ID",
       "Campaign Name",
       "Campaign Type",
@@ -72,7 +74,10 @@ const SOURCE_CONFIG = {
       "PO Number",
       "PO Date",
       "Agency Name",
+      "Medium",
       "Brand",
+      "Campaign Start Date",
+      "Campaign End Date",
       "PO Amount Incl Tax",
       "File Name",
       "Status",
@@ -80,9 +85,10 @@ const SOURCE_CONFIG = {
   },
   mediaSchedule: {
     label: "Media Estimate/Schedule",
-    inputId: "media-schedule-input",
     columns: [
       "Source",
+      "Import ID",
+      "Document Type",
       "Campaign ID",
       "Campaign Name",
       "Campaign Type",
@@ -92,7 +98,10 @@ const SOURCE_CONFIG = {
       "PO Number",
       "Advertiser Name",
       "Agency Name",
+      "Medium",
       "Brand",
+      "Campaign Start Date",
+      "Campaign End Date",
       "Channel Name",
       "Program",
       "Date",
@@ -108,11 +117,13 @@ const SOURCE_CONFIG = {
   },
   agency: {
     label: "Agency Invoice",
-    inputId: "agency-input",
     columns: [
       "Source",
+      "Import ID",
+      "Document Type",
       "Agency Name",
       "Advertiser Name",
+      "Medium",
       "Invoice Number",
       "Invoice Date",
       "Campaign Period",
@@ -126,6 +137,8 @@ const SOURCE_CONFIG = {
       "Campaign Type",
       "Campaign Manager",
       "Program Name",
+      "Campaign Start Date",
+      "Campaign End Date",
       "Total Value Including Taxes",
       "Channel Name",
       "Program",
@@ -142,13 +155,15 @@ const SOURCE_CONFIG = {
   },
   thirdPartyInvoice: {
     label: "Publisher Invoice",
-    inputId: "third-party-invoice-input",
     columns: [
       "Source",
+      "Import ID",
+      "Document Type",
       "Media Type",
       "Advertiser Name",
       "Third Party Vendor Name",
       "Agency Name",
+      "Medium",
       "Channel Name",
       "Billing Period",
       "PR Number",
@@ -159,6 +174,8 @@ const SOURCE_CONFIG = {
       "Campaign Type",
       "Campaign Manager",
       "Program Name",
+      "Campaign Start Date",
+      "Campaign End Date",
       "TP",
       "Program",
       "Date",
@@ -175,12 +192,14 @@ const SOURCE_CONFIG = {
   },
   thirdPartyMonitoring: {
     label: "3rd Party Monitoring Report",
-    inputId: "third-party-monitoring-input",
     columns: [
       "Source",
+      "Import ID",
+      "Document Type",
       "Media Type",
       "Advertiser Name",
       "Agency Name",
+      "Medium",
       "Third Party Vendor Name",
       "Channel Name",
       "Brand",
@@ -189,6 +208,8 @@ const SOURCE_CONFIG = {
       "Campaign Type",
       "Campaign Manager",
       "Program Name",
+      "Campaign Start Date",
+      "Campaign End Date",
       "Program",
       "Date",
       "Day",
@@ -206,16 +227,49 @@ const SOURCE_CONFIG = {
 
 const GLOBAL_FILTERS = [
   "campaign",
+  "advertiser",
+  "brand",
   "agency",
   "mediaType",
   "channel",
 ];
 
+const FILTER_LABELS = {
+  campaign: "Campaign",
+  advertiser: "Advertiser",
+  brand: "Brand",
+  agency: "Agency",
+  mediaType: "Medium",
+  channel: "Platform",
+};
+
+const SOURCE_PREFIXES = {
+  mediaSchedule: "mes",
+  agency: "agi",
+  thirdPartyInvoice: "bri",
+  thirdPartyMonitoring: "agm",
+  po: "pur",
+  program: "cmp",
+};
+
+const SOURCE_TYPE_LABELS = {
+  mediaSchedule: "Media Estimate/Schedule",
+  agency: "Agency Invoice",
+  thirdPartyInvoice: "Broadcaster / 3rd Party / Channel Invoice",
+  thirdPartyMonitoring: "3rd Party Monitoring",
+  po: "Purchase Order",
+};
+
 const FILTER_DEFS = [
+  { key: "brand", label: "Brand" },
+  { key: "advertiser", label: "Advertiser" },
+  { key: "agency", label: "Agency" },
+  { key: "campaignPeriod", label: "Campaign Period" },
+  { key: "campaignId", label: "Campaign ID" },
+  { key: "broadcaster", label: "Broadcaster Name" },
   { key: "budget", label: "Budget" },
   { key: "invoiceNumber", label: "Invoice Number" },
-  { key: "prNumber", label: "PR No." },
-  { key: "poNumber", label: "PO No." },
+  { key: "poNumber", label: "Purchase Order No." },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "proofOfPerformance", label: "Proof of Performance" },
   { key: "expenseMonitoring", label: "Expense Monitoring" },
@@ -270,6 +324,10 @@ const FIELD_ALIASES = {
   monitoringStatus: ["monitoring status", "status"],
   status: ["reconciliation status", "status", "match status"],
   fileName: ["file name", "filename"],
+  importId: ["import id", "unique id"],
+  documentType: ["document type", "data source"],
+  campaignStartDate: ["campaign start date", "start date"],
+  campaignEndDate: ["campaign end date", "end date"],
 };
 
 const HELP_CONTENT = {
@@ -290,8 +348,12 @@ const HELP_CONTENT = {
     lines: ["Supported: PDF files", "TV: AdEx or BARC report", "Print: tear sheet copies", "Digital: platform or 3rd party monitoring and DCM report"],
   },
   po: {
-    title: "PO",
+    title: "Purchase Order",
     lines: ["Supported: PDF files", "Recommended size: under 20 MB", "Upload purchase order PDF."],
+  },
+  unifiedUpload: {
+    title: "Upload PDF Source File",
+    lines: ["Select one source type at a time.", "Agency, medium, advertiser and campaign dates are required.", "New agency or advertiser names are remembered for future uploads."],
   },
 };
 
@@ -479,6 +541,7 @@ const state = {
   globalFilters: {},
   accountingFilters: {},
   searchQuery: "",
+  masterOptions: { agencies: [], advertisers: [] },
   dirty: false,
 };
 
@@ -502,8 +565,11 @@ async function loadState() {
   state.activeCaseId = session ? localStorage.getItem(STORAGE_KEYS.activeCase) : null;
   state.globalFilters = keepKnownFilters(readJSON(STORAGE_KEYS.globalFilters, {}), GLOBAL_FILTERS);
   state.accountingFilters = keepKnownFilters(readJSON(STORAGE_KEYS.accountingFilters, {}), FILTER_DEFS.map((item) => item.key));
+  state.masterOptions = { agencies: [], advertisers: [], ...readJSON(STORAGE_KEYS.masterOptions, {}) };
   const active = getActiveCase();
   if (active) hydrateCase(active);
+  refreshMasterOptionsFromCases();
+  refreshMasterOptionsFromDatasets();
 }
 
 function keepKnownFilters(filters, allowedKeys) {
@@ -530,9 +596,8 @@ function bindEvents() {
   $("#close-help").addEventListener("click", closeUploadHelp);
   $("#support-help").addEventListener("click", () => toast("Contact support with the file format, file size, and upload source."));
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => switchModule(button.dataset.module)));
-  $$("#app-shell [data-global-filter]").forEach((select) => select.addEventListener("change", handleGlobalFilter));
   $$(".source-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
-  $$("[data-import-source]").forEach((button) => button.addEventListener("click", () => importSourceFiles(button.dataset.importSource)));
+  $("#unified-import").addEventListener("click", importUnifiedSourceFiles);
   $$(".help-dot").forEach((button) => button.addEventListener("click", () => button.focus()));
   $("#reset-global-filters").addEventListener("click", resetGlobalFilters);
   $("#collapse-filters").addEventListener("click", () => setFiltersCollapsed(true));
@@ -552,6 +617,10 @@ function bindEvents() {
     if (!state.dirty) return;
     event.preventDefault();
     event.returnValue = "";
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".search-filter")) return;
+    $$(".search-filter.is-open").forEach((item) => item.classList.remove("is-open"));
   });
 }
 
@@ -589,7 +658,7 @@ function showApp() {
   $("#campaign-panel").classList.remove("hidden");
   const active = getActiveCase();
   if (active) $("#campaign-name").value = active.name || "";
-  setFiltersCollapsed(true);
+  setFiltersCollapsed(false);
   switchModule(state.activeModule);
   renderAll();
 }
@@ -600,7 +669,7 @@ function signedInLabel() {
 }
 
 function visibleView(view) {
-  return ["program", "pr", "po", "mediaSchedule", "agency", "thirdPartyInvoice"].includes(view) ? view : "agency";
+  return ["program", "po", "mediaSchedule", "agency", "thirdPartyInvoice"].includes(view) ? view : "agency";
 }
 
 async function handleLogin(event) {
@@ -848,10 +917,7 @@ function startNewCase() {
   $("#campaign-panel").classList.remove("hidden");
   $("#existing-list").classList.add("hidden");
   $("#campaign-name").value = "";
-  Object.values(SOURCE_CONFIG).forEach((config) => {
-    const input = $(`#${config.inputId}`);
-    if (input) input.value = "";
-  });
+  resetUnifiedUploadForm();
   renderAll();
 }
 
@@ -896,12 +962,50 @@ function hydrateCase(caseItem) {
   state.hiddenColumns = caseItem.hiddenColumns || {};
   state.sort = caseItem.sort || { column: null, direction: "asc" };
   state.activeView = visibleView(caseItem.activeView);
+  refreshMasterOptionsFromDatasets();
+}
+
+async function importUnifiedSourceFiles() {
+  const sourceKey = $("#source-type-select").value;
+  const config = SOURCE_CONFIG[sourceKey];
+  const input = $("#source-file-input");
+  const files = Array.from(input.files || []);
+  const metadata = readUploadMetadata();
+  const validationError = validateUploadMetadata(sourceKey, files, metadata);
+  if (validationError) {
+    toast(validationError);
+    return;
+  }
+
+  try {
+    const imported = [];
+    for (const file of files) {
+      const parsed = await parseFileForSource(file, sourceKey);
+      imported.push(...applyUploadMetadata(parsed.rows, sourceKey, metadata));
+    }
+    state.datasets[sourceKey] = [...(state.datasets[sourceKey] || []), ...imported];
+    rememberMasterOption("agencies", metadata.agency);
+    rememberMasterOption("advertisers", metadata.advertiser);
+    deriveProgramAndPrRows({ overwrite: false });
+    state.accountingFilters = {};
+    state.globalFilters = {};
+    state.searchQuery = "";
+    $("#table-search").value = "";
+    state.activeView = visibleView(sourceKey);
+    if (!$("#campaign-name").value.trim()) $("#campaign-name").value = "Invoice reconciliation";
+    state.dirty = true;
+    resetUnifiedUploadForm({ keepMasters: true });
+    renderAll();
+    toast(`${imported.length} row${imported.length === 1 ? "" : "s"} extracted into ${config.label}.`);
+  } catch (error) {
+    toast(error.message || "Import failed.");
+  }
 }
 
 async function importSourceFiles(sourceKey) {
   const config = SOURCE_CONFIG[sourceKey];
   const input = $(`#${config.inputId}`);
-  const files = Array.from(input.files || []);
+  const files = Array.from(input?.files || []);
   if (!files.length) {
     toast(`Select a file for ${config.label}.`);
     return;
@@ -929,6 +1033,107 @@ async function importSourceFiles(sourceKey) {
   } catch (error) {
     toast(error.message || "Import failed.");
   }
+}
+
+function readUploadMetadata() {
+  const startDate = $("#campaign-start-date").value;
+  const endDate = $("#campaign-end-date").value;
+  return {
+    agency: $("#upload-agency").value.trim(),
+    advertiser: $("#upload-advertiser").value.trim(),
+    medium: $("#upload-medium").value.trim(),
+    campaignStartDate: startDate,
+    campaignEndDate: endDate,
+    campaignPeriod: startDate && endDate ? `${startDate} to ${endDate}` : "",
+  };
+}
+
+function validateUploadMetadata(sourceKey, files, metadata) {
+  if (!sourceKey || !SOURCE_CONFIG[sourceKey]) return "Choose what type of data this PDF contains.";
+  if (!files.length) return "Choose at least one PDF file.";
+  if (files.some((file) => !/\.pdf$/i.test(file.name))) return "Only PDF files are supported here.";
+  if (!metadata.agency) return "Agency name is required.";
+  if (!metadata.medium) return "Medium is required.";
+  if (!metadata.advertiser) return "Advertiser name is required.";
+  if (!metadata.campaignStartDate || !metadata.campaignEndDate) return "Campaign start and end dates are required.";
+  if (metadata.campaignEndDate < metadata.campaignStartDate) return "Campaign end date must be after the start date.";
+  return "";
+}
+
+function applyUploadMetadata(rows, sourceKey, metadata) {
+  const prefix = SOURCE_PREFIXES[sourceKey] || "src";
+  const stamp = `${compactTimestamp()}-${crypto.randomUUID().slice(0, 4)}`;
+  return rows.map((row, index) => {
+    const next = { ...row };
+    next["Import ID"] = next["Import ID"] || `${prefix}-${stamp}-${String(index + 1).padStart(3, "0")}`;
+    next["Document Type"] = next["Document Type"] || SOURCE_TYPE_LABELS[sourceKey] || SOURCE_CONFIG[sourceKey]?.label || "";
+    next["Agency Name"] = next["Agency Name"] || metadata.agency;
+    next["Advertiser Name"] = next["Advertiser Name"] || metadata.advertiser;
+    next.Medium = next.Medium || metadata.medium;
+    next["Media Type"] = next["Media Type"] || metadata.medium;
+    next["Campaign Start Date"] = next["Campaign Start Date"] || metadata.campaignStartDate;
+    next["Campaign End Date"] = next["Campaign End Date"] || metadata.campaignEndDate;
+    next["Campaign Period"] = next["Campaign Period"] || metadata.campaignPeriod;
+    return next;
+  });
+}
+
+function compactTimestamp() {
+  return new Date().toISOString().replace(/\D/g, "").slice(2, 14);
+}
+
+function resetUnifiedUploadForm(options = {}) {
+  $("#source-file-input").value = "";
+  $("#source-type-select").value = "";
+  $("#upload-medium").value = "";
+  $("#campaign-start-date").value = "";
+  $("#campaign-end-date").value = "";
+  if (!options.keepMasters) {
+    $("#upload-agency").value = "";
+    $("#upload-advertiser").value = "";
+  }
+  renderMasterOptionDatalists();
+}
+
+function rememberMasterOption(type, value) {
+  const clean = String(value || "").trim();
+  if (!clean) return;
+  const current = new Set(state.masterOptions[type] || []);
+  current.add(clean);
+  state.masterOptions[type] = Array.from(current).sort((a, b) => a.localeCompare(b));
+  localStorage.setItem(STORAGE_KEYS.masterOptions, JSON.stringify(state.masterOptions));
+}
+
+function refreshMasterOptionsFromDatasets() {
+  const rows = combinedRows();
+  rows.forEach((row) => {
+    const agency = readField(row, "agency");
+    const advertiser = readField(row, "advertiser");
+    if (agency) rememberMasterOption("agencies", agency);
+    if (advertiser) rememberMasterOption("advertisers", advertiser);
+  });
+  renderMasterOptionDatalists();
+}
+
+function refreshMasterOptionsFromCases() {
+  state.cases.forEach((caseItem) => {
+    Object.entries(caseItem.datasets || {}).forEach(([sourceKey, rows]) => {
+      if (sourceKey === "pr") return;
+      (rows || []).forEach((row) => {
+        const agency = readField(row, "agency");
+        const advertiser = readField(row, "advertiser");
+        if (agency) rememberMasterOption("agencies", agency);
+        if (advertiser) rememberMasterOption("advertisers", advertiser);
+      });
+    });
+  });
+}
+
+function renderMasterOptionDatalists() {
+  const agencyList = $("#agency-options");
+  const advertiserList = $("#advertiser-options");
+  if (agencyList) agencyList.innerHTML = (state.masterOptions.agencies || []).map((value) => `<option value="${escapeHTML(value)}"></option>`).join("");
+  if (advertiserList) advertiserList.innerHTML = (state.masterOptions.advertisers || []).map((value) => `<option value="${escapeHTML(value)}"></option>`).join("");
 }
 
 async function parseFileForSource(file, sourceKey) {
@@ -1510,25 +1715,8 @@ function renderTabs() {
 
 function renderSummary() {
   const summary = $("#source-summary");
-  const reconciliationRows = buildReconciliationRows();
-  const totalSourceRows = Object.values(state.datasets).reduce((total, rows) => total + rows.length, 0);
-  if (!totalSourceRows) {
-    summary.innerHTML = "";
-    summary.classList.add("hidden");
-    return;
-  }
-  summary.classList.remove("hidden");
-  const cards = [
-    ["Campaign", state.datasets.program.length],
-    ["PR", state.datasets.pr.length],
-    ["PO", state.datasets.po.length],
-    ["Media Schedule", state.datasets.mediaSchedule.length],
-    ["Agency", state.datasets.agency.length],
-    ["Publisher", state.datasets.thirdPartyInvoice.length],
-    ["Monitoring", state.datasets.thirdPartyMonitoring.length],
-    ["Reco Review", reconciliationRows.filter((row) => row["Reconciliation Status"] !== "Matched").length],
-  ];
-  summary.innerHTML = cards.map(([label, count]) => `<div class="summary-card"><strong>${count}</strong><span>${label}</span></div>`).join("");
+  summary.innerHTML = "";
+  summary.classList.add("hidden");
 }
 
 function applyQualityAnnotations() {
@@ -1729,8 +1917,24 @@ function renderColumnPanel() {
 function renderGlobalFilters() {
   const rows = allRowsWithReconciliation();
   GLOBAL_FILTERS.forEach((key) => {
-    const select = $(`[data-global-filter="${key}"]`);
-    fillSelectFromRows(select, rows, key, state.globalFilters[key]);
+    const container = $(`[data-global-filter-control="${key}"]`);
+    const values = uniqueValues(rows.map((row) => readField(row, key))).filter(Boolean);
+    renderSearchableFilter(container, {
+      key,
+      label: FILTER_LABELS[key] || toTitle(key),
+      values,
+      selected: state.globalFilters[key],
+      disabledText: "No values yet",
+      onChange: (nextValues) => {
+        state.globalFilters[key] = nextValues;
+        if (!nextValues.length) delete state.globalFilters[key];
+        localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
+        renderFilterChips();
+        renderGrid();
+      },
+    });
+    state.globalFilters[key] = normalizeFilterValues(state.globalFilters[key]).filter((value) => values.includes(value));
+    if (!state.globalFilters[key].length) delete state.globalFilters[key];
   });
   updateGlobalFilterCount();
   localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
@@ -1741,28 +1945,89 @@ function renderAccountingFilters() {
   const rows = allRowsWithReconciliation();
   form.innerHTML = "";
   FILTER_DEFS.forEach((def) => {
-    const label = document.createElement("label");
-    label.textContent = def.label;
-    const select = document.createElement("select");
-    select.dataset.accountFilter = def.key;
-    select.multiple = true;
-    select.size = 1;
-    select.title = "Use Ctrl or Shift to select multiple values.";
+    const wrapper = document.createElement("div");
+    wrapper.className = "filter-control-shell side-filter-control";
     const values = uniqueValues(rows.map((row) => readField(row, def.key))).filter(Boolean);
-    if (!values.length) {
-      select.innerHTML = `<option value="">Column not found yet</option>`;
-      select.disabled = true;
-    } else {
-      select.innerHTML = `<option value="">All</option>${values.map((value) => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("")}`;
-      applySelectValues(select, values, state.accountingFilters[def.key]);
-      state.accountingFilters[def.key] = normalizeFilterValues(state.accountingFilters[def.key]).filter((value) => values.includes(value));
-      if (!state.accountingFilters[def.key].length) delete state.accountingFilters[def.key];
-    }
-    select.addEventListener("change", handleAccountingFilter);
-    label.appendChild(select);
-    form.appendChild(label);
+    renderSearchableFilter(wrapper, {
+      key: def.key,
+      label: def.label,
+      values,
+      selected: state.accountingFilters[def.key],
+      disabledText: "No values yet",
+      onChange: (nextValues) => {
+        state.accountingFilters[def.key] = nextValues;
+        if (!nextValues.length) delete state.accountingFilters[def.key];
+        localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
+        renderFilterChips();
+        renderGrid();
+      },
+    });
+    state.accountingFilters[def.key] = normalizeFilterValues(state.accountingFilters[def.key]).filter((value) => values.includes(value));
+    if (!state.accountingFilters[def.key].length) delete state.accountingFilters[def.key];
+    form.appendChild(wrapper);
   });
   localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
+}
+
+function renderSearchableFilter(container, config) {
+  if (!container) return;
+  const selected = normalizeFilterValues(config.selected).filter((value) => config.values.includes(value));
+  const summary = selected.length ? `${selected.length} selected` : "All";
+  container.innerHTML = `
+    <label class="filter-label">${escapeHTML(config.label)}</label>
+    <div class="search-filter ${config.values.length ? "" : "is-disabled"}" data-filter-key="${escapeHTML(config.key)}">
+      <button class="filter-select-button" type="button" ${config.values.length ? "" : "disabled"}>
+        <span>${escapeHTML(summary)}</span><b>v</b>
+      </button>
+      <div class="filter-dropdown">
+        <input class="filter-search-input" type="search" placeholder="Search ${escapeHTML(config.label)}" />
+        <button class="filter-clear-option" type="button">All</button>
+        <div class="filter-option-list">
+          ${
+            config.values.length
+              ? config.values.map((value) => `
+                <label class="filter-option">
+                  <input type="checkbox" value="${escapeHTML(value)}" ${selected.includes(value) ? "checked" : ""} />
+                  <span>${escapeHTML(value)}</span>
+                </label>
+              `).join("")
+              : `<span class="filter-empty">${escapeHTML(config.disabledText || "No values")}</span>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+  const root = container.querySelector(".search-filter");
+  const button = container.querySelector(".filter-select-button");
+  const search = container.querySelector(".filter-search-input");
+  button?.addEventListener("click", () => {
+    $$(".search-filter.is-open").forEach((item) => {
+      if (item !== root) item.classList.remove("is-open");
+    });
+    root.classList.toggle("is-open");
+    if (root.classList.contains("is-open")) search?.focus();
+  });
+  search?.addEventListener("input", () => {
+    const query = search.value.trim().toLowerCase();
+    container.querySelectorAll(".filter-option").forEach((option) => {
+      option.hidden = query && !option.textContent.toLowerCase().includes(query);
+    });
+  });
+  container.querySelector(".filter-clear-option")?.addEventListener("click", () => {
+    container.querySelectorAll(".filter-option input").forEach((input) => {
+      input.checked = false;
+    });
+    config.onChange([]);
+    renderSearchableFilter(container, { ...config, selected: [] });
+  });
+  container.querySelectorAll(".filter-option input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const nextValues = Array.from(container.querySelectorAll(".filter-option input:checked")).map((item) => item.value);
+      config.onChange(nextValues);
+      const label = container.querySelector(".filter-select-button span");
+      if (label) label.textContent = nextValues.length ? `${nextValues.length} selected` : "All";
+    });
+  });
 }
 
 function renderFilterChips() {
@@ -1817,39 +2082,10 @@ function clearFilterChip(type, key, value = "") {
   renderAll();
 }
 
-function fillSelectFromRows(select, rows, key, current) {
-  const values = uniqueValues(rows.map((row) => readField(row, key))).filter(Boolean);
-  select.multiple = true;
-  select.size = 1;
-  select.title = "Use Ctrl or Shift to select multiple values.";
-  select.innerHTML = `<option value="">All</option>${values.map((value) => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("")}`;
-  applySelectValues(select, values, current);
-  state.globalFilters[key] = normalizeFilterValues(current).filter((value) => values.includes(value));
-  if (!state.globalFilters[key].length) delete state.globalFilters[key];
-}
-
-function handleGlobalFilter(event) {
-  const key = event.target.dataset.globalFilter;
-  state.globalFilters[key] = selectedValuesFromSelect(event.target);
-  if (!state.globalFilters[key].length) delete state.globalFilters[key];
-  localStorage.setItem(STORAGE_KEYS.globalFilters, JSON.stringify(state.globalFilters));
-  renderFilterChips();
-  renderGrid();
-}
-
 function resetGlobalFilters() {
   state.globalFilters = {};
   localStorage.removeItem(STORAGE_KEYS.globalFilters);
   renderAll();
-}
-
-function handleAccountingFilter(event) {
-  const key = event.target.dataset.accountFilter;
-  state.accountingFilters[key] = selectedValuesFromSelect(event.target);
-  if (!state.accountingFilters[key].length) delete state.accountingFilters[key];
-  localStorage.setItem(STORAGE_KEYS.accountingFilters, JSON.stringify(state.accountingFilters));
-  renderFilterChips();
-  renderGrid();
 }
 
 function clearAccountingFilters() {
@@ -1864,19 +2100,6 @@ function normalizeFilterValues(value) {
   if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
   const clean = String(value || "").trim();
   return clean ? [clean] : [];
-}
-
-function selectedValuesFromSelect(select) {
-  return Array.from(select.selectedOptions || [])
-    .map((option) => option.value)
-    .filter(Boolean);
-}
-
-function applySelectValues(select, allowedValues, current) {
-  const selected = normalizeFilterValues(current).filter((value) => allowedValues.includes(value));
-  Array.from(select.options).forEach((option) => {
-    option.selected = option.value ? selected.includes(option.value) : !selected.length;
-  });
 }
 
 function renderGrid() {
@@ -2012,7 +2235,9 @@ function allRowsWithReconciliation() {
 }
 
 function combinedRows() {
-  return Object.values(state.datasets).flat();
+  return Object.entries(state.datasets)
+    .filter(([sourceKey]) => sourceKey !== "pr")
+    .flatMap(([, rows]) => rows);
 }
 
 function deriveProgramAndPrRows(options = {}) {

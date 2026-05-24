@@ -65,14 +65,22 @@ Load sample is not shown in the table action row.
 The upload area uses tighter source cards with short source icons and reduced vertical space.
 Upload help uses hover/focus info tooltips instead of a plain question mark help button.
 The separate PDF Auto Import card has been removed.
-The five source cards now handle PDF extraction directly: Media Estimate/Schedule, Agency Invoice, Publisher Invoice, 3rd Party Monitoring, and Purchase Order.
-These source cards accept PDF files only in the current UI.
+The five separate source upload cards have been replaced with one required PDF upload intake.
+The intake asks for source type, agency name, medium, advertiser name, campaign start date, and campaign end date before extraction.
+Agency and advertiser inputs support existing values and new typed values; new values are remembered for future uploads.
+Source type is single-choice and follows the source sequence: Media Estimate/Schedule, Agency Invoice, Broadcaster / 3rd Party / Channel Invoice, 3rd Party Monitoring, and Purchase Order.
+The upload intake accepts PDF files only in the current UI.
 PDF extraction runs in the browser through PDF.js, so it does not require the local /api/extract_pdf backend route.
 Text-based PDFs can be parsed directly. Scanned/image-only PDFs still need OCR before field extraction can be reliable.
-All upload sources support selecting multiple PDF files at once.
+The upload intake supports selecting multiple PDF files at once.
 New PDF uploads append to the existing rows instead of replacing older uploaded data, so the workspace can grow continuously as more files arrive.
 The empty extraction quality dashboard is no longer shown before data import.
+Global filters use searchable checkbox dropdowns and include Campaign, Advertiser, Brand, Agency, Medium, and Platform.
+The accounting filter rail is open by default and uses the same searchable checkbox dropdown behavior.
+The visible table tabs are Campaign, Purchase Order, Media Estimate/Schedule, Agency Invoice, and Publisher Invoice. The PR tab has been removed from the workspace.
+Imported rows receive source-specific import IDs such as agi, bri, agm, mes, and pur prefixes.
 The first screen uses a refreshed dashboard hero illustration.
+The first screen hero image rotates through multiple dashboard preview illustrations.
 The layout is responsive across desktop, tablet, and mobile widths.
 
 Main upload inputs:

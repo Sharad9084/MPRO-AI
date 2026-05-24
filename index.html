@@ -15,7 +15,12 @@
   <body>
     <main id="entry-screen" class="entry-screen">
       <section class="entry-visual" aria-label="TAG-mPRO dashboard intelligence visual">
-        <img class="hero-dashboard-image" src="dashboard-hero.svg" alt="Marketing reconciliation dashboard preview" />
+        <div class="hero-carousel" aria-hidden="true">
+          <img class="hero-dashboard-image hero-slide slide-one" src="dashboard-hero.svg" alt="" />
+          <img class="hero-dashboard-image hero-slide slide-two" src="dashboard-hero-media.svg" alt="" />
+          <img class="hero-dashboard-image hero-slide slide-three" src="dashboard-hero-audit.svg" alt="" />
+          <img class="hero-dashboard-image hero-slide slide-four" src="dashboard-hero-monitoring.svg" alt="" />
+        </div>
       </section>
       <section class="entry-content">
         <div class="powered">Powered by <strong>TAGMA Consulting</strong></div>
@@ -123,10 +128,12 @@
         </div>
       </header>
       <section class="global-filter-nav" aria-label="Global filters">
-        <label>Campaign<select data-global-filter="campaign"></select></label>
-        <label>Agency<select data-global-filter="agency"></select></label>
-        <label>Medium<select data-global-filter="mediaType"></select></label>
-        <label>Platform<select data-global-filter="channel"></select></label>
+        <div class="filter-control-shell" data-global-filter-control="campaign"></div>
+        <div class="filter-control-shell" data-global-filter-control="advertiser"></div>
+        <div class="filter-control-shell" data-global-filter-control="brand"></div>
+        <div class="filter-control-shell" data-global-filter-control="agency"></div>
+        <div class="filter-control-shell" data-global-filter-control="mediaType"></div>
+        <div class="filter-control-shell" data-global-filter-control="channel"></div>
         <button id="reset-global-filters" class="nav-filter-reset" type="button" title="Reset filters">Reset</button>
       </section>
 
@@ -136,51 +143,68 @@
           <aside id="accounting-filters" class="side-filters">
             <div class="side-filter-head">
               <h2>Accounting Filters</h2>
-              <button id="collapse-filters" class="icon-button" type="button" title="Collapse filters">&lt;</button>
+              <button id="collapse-filters" class="icon-button" type="button" title="Collapse filters">«</button>
             </div>
             <form id="accounting-filter-form" class="filter-form"></form>
             <button id="clear-accounting-filters" class="ghost-action full" type="button">Clear Filters</button>
           </aside>
 
-          <button id="expand-filters" class="filter-rail hidden" type="button">Filters</button>
+          <button id="expand-filters" class="filter-rail hidden" type="button" title="Open filters">» Filters</button>
 
           <section class="table-zone">
             <div id="campaign-choice" class="campaign-choice hidden"></div>
 
             <div id="campaign-panel" class="campaign-panel">
               <input id="campaign-name" type="hidden" value="Invoice reconciliation" />
-              <section class="upload-grid" aria-label="Document uploads">
-                <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">MS</span><strong>Media Estimate/Schedule</strong><button class="help-dot" type="button" data-help="mediaSchedule" aria-label="Media estimate or schedule help">i<span class="help-tooltip">Upload media estimate or schedule PDF for planned spots, dates, channels and schedule amount.</span></button></div>
-                  <input id="media-schedule-input" type="file" accept=".pdf" multiple />
-                  <button class="ghost-action full" type="button" data-import-source="mediaSchedule">Extract</button>
-                </article>
-                <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">AI</span><strong>Agency Invoice</strong><button class="help-dot" type="button" data-help="agency" aria-label="Agency invoice help">i<span class="help-tooltip">Upload agency invoice with PO, PR, campaign reference and cost values.</span></button></div>
-                  <input id="agency-input" type="file" accept=".pdf" multiple />
-                  <button class="ghost-action full" type="button" data-import-source="agency">Extract</button>
-                </article>
-                <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">PI</span><strong>Publisher Invoice</strong><button class="help-dot" type="button" data-help="thirdPartyInvoice" aria-label="Publisher invoice help">i<span class="help-tooltip">Upload broadcaster, publisher, platform or vendor invoice files.</span></button></div>
-                  <input id="third-party-invoice-input" type="file" accept=".pdf" multiple />
-                  <button class="ghost-action full" type="button" data-import-source="thirdPartyInvoice">Extract</button>
-                </article>
-                <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">MR</span><strong>3rd Party Monitoring</strong><button class="help-dot" type="button" data-help="thirdPartyMonitoring" aria-label="Monitoring help">i<span class="help-tooltip">Upload AdEx, BARC, tear sheet, DCM or platform monitoring proof.</span></button></div>
-                  <input id="third-party-monitoring-input" type="file" accept=".pdf" multiple />
-                  <button class="ghost-action full" type="button" data-import-source="thirdPartyMonitoring">Extract</button>
-                </article>
-                <article class="upload-card">
-                  <div class="upload-title"><span class="upload-icon">PO</span><strong>Purchase Order</strong><button class="help-dot" type="button" data-help="po" aria-label="Purchase order help">i<span class="help-tooltip">Upload purchase order extract or PO PDF with PR and amount references.</span></button></div>
-                  <input id="po-input" type="file" accept=".pdf" multiple />
-                  <button class="ghost-action full" type="button" data-import-source="po">Extract</button>
-                </article>
+              <section class="unified-upload" aria-label="PDF upload intake">
+                <div class="upload-title">
+                  <span class="upload-icon">UP</span>
+                  <strong>Upload PDF Source File</strong>
+                  <button class="help-dot" type="button" data-help="unifiedUpload" aria-label="Upload help">i<span class="help-tooltip">Choose the PDF type, agency, medium, advertiser and campaign dates before extraction.</span></button>
+                </div>
+                <label class="upload-file-field">PDF file
+                  <input id="source-file-input" type="file" accept=".pdf" multiple />
+                </label>
+                <label>Data source
+                  <select id="source-type-select" required>
+                    <option value="">Choose source</option>
+                    <option value="mediaSchedule">Media Estimate/Schedule</option>
+                    <option value="agency">Agency Invoice</option>
+                    <option value="thirdPartyInvoice">Broadcaster / 3rd Party / Channel Invoice</option>
+                    <option value="thirdPartyMonitoring">3rd Party Monitoring</option>
+                    <option value="po">Purchase Order</option>
+                  </select>
+                </label>
+                <label>Agency name
+                  <input id="upload-agency" list="agency-options" type="text" placeholder="Select or type agency" required />
+                  <datalist id="agency-options"></datalist>
+                </label>
+                <label>Medium
+                  <select id="upload-medium" required>
+                    <option value="">Choose one</option>
+                    <option>TV</option>
+                    <option>Radio</option>
+                    <option>Print</option>
+                    <option>Digital</option>
+                    <option>Outdoor</option>
+                  </select>
+                </label>
+                <label>Advertiser name
+                  <input id="upload-advertiser" list="advertiser-options" type="text" placeholder="Select or type advertiser" required />
+                  <datalist id="advertiser-options"></datalist>
+                </label>
+                <label>Campaign start date
+                  <input id="campaign-start-date" type="date" required />
+                </label>
+                <label>Campaign end date
+                  <input id="campaign-end-date" type="date" required />
+                </label>
+                <button id="unified-import" class="danger-action compact" type="button">Extract</button>
               </section>
 
               <section class="source-tabs" aria-label="Accounting data tabs">
                 <button class="source-tab" type="button" data-view="program">Campaign</button>
-                <button class="source-tab" type="button" data-view="pr">PR - Purchase Requisition</button>
-                <button class="source-tab" type="button" data-view="po">PO - Purchase Order</button>
+                <button class="source-tab" type="button" data-view="po">Purchase Order</button>
                 <button class="source-tab" type="button" data-view="mediaSchedule">Media Estimate/Schedule</button>
                 <button class="source-tab active" type="button" data-view="agency">Agency Invoice</button>
                 <button class="source-tab" type="button" data-view="thirdPartyInvoice">Publisher Invoice</button>
