@@ -35,6 +35,42 @@ The frontend checks window.TAG_MPRO_API_BASE or localStorage key mpro.apiBase fi
 For localhost or direct file usage, it defaults to http://127.0.0.1:8787.
 For deployed domains, it defaults to the same-domain /api Vercel Functions.
 
+Live deployment status:
+Production site:
+https://mpro-ai.vercel.app/
+
+Production repository:
+https://github.com/Sharad9084/MPRO-AI
+
+The PDF extraction API is deployed inside the same Vercel project, not as a separate server.
+Live extraction endpoint:
+https://mpro-ai.vercel.app/api/extract
+
+Deployment commit status:
+- Commit beb5354 integrated the MPro PDF extractor API into the frontend repository.
+- Commit 28a2830 fixed Vercel read-only filesystem behavior by disabling debug storage writes during API extraction.
+- The live /api/extract endpoint was verified with PO_4536170866.pdf and returned sourceType po, confidence High, 2 extracted rows, and PO Number 4536170866.
+
+PDF extractor integration:
+The original mpro-pdf-extractor Python engine has been copied into the frontend repository under extractor/.
+The Vercel Python Function api/extract.py accepts multipart PDF uploads and calls extractor.engine.extract_pdf().
+The frontend upload flow calls /api/extract first for supported source types and then appends the returned JSON rows into the selected table.
+The browser PDF.js parser remains as a fallback if the API is unavailable, mainly for direct-file or offline testing.
+The API returns JSON rows, not Excel. Excel generation remains useful as a future export feature, but JSON is the correct format for feeding the dashboard tables.
+
+Current PDF parser coverage:
+- Purchase Order: working for the tested Xiaomi PO format.
+- Agency Invoice: header extraction is available; detailed annexure/table row extraction still needs improvement.
+- Broadcaster / Publisher Invoice: header extraction is available; broadcaster-specific telecast/annexure row parsers still need improvement.
+- 3rd Party Monitoring Report: header extraction is available; full table extraction still needs improvement.
+- Media Estimate/Schedule: still uses the browser parser/fallback path until a dedicated backend parser is added.
+
+Current extraction limitations:
+The extractor works best on text-based PDFs.
+Scanned/image-only PDFs still need OCR support before extraction can be reliable.
+Parser confidence currently means important fields were found; it does not always mean every spot-level or table-level row is fully correct.
+Human review is still expected after import, especially for agency invoices, broadcaster invoices, and monitoring reports.
+
 Security:
 Backend accounts are created through the API when the API is running.
 Passwords are not stored as plain text. The backend stores a password salt and PBKDF2-SHA256 password hash.
@@ -191,3 +227,40 @@ Frontend:
 Open index.html directly, serve the folder locally, or deploy it as a static frontend.
 During local testing it can be opened at:
 http://127.0.0.1:8000/index.html
+
+Recommended next steps:
+1. Test the live site with one PDF from each source type:
+   - Purchase Order
+   - Agency Invoice
+   - Broadcaster / Publisher Invoice
+   - 3rd Party Monitoring Report
+   - Media Estimate/Schedule
+
+2. For each test PDF, check:
+   - Did the correct table receive rows?
+   - Did invoice number, PO number, dates, agency, advertiser, brand, amount, channel, and program fields fill correctly?
+   - Did the parser produce only header rows or detailed table/spot rows?
+   - Did Parser Confidence show High, Medium, or Low?
+
+3. Prepare a small golden test set:
+   - 5 PO PDFs
+   - 5 agency invoice PDFs
+   - 5 broadcaster invoice PDFs
+   - 5 monitoring report PDFs
+   - Correct Excel output for each source type
+
+4. Improve parsers in this order:
+   - Agency Invoice Annexure-1 and Annexure-2 row extraction
+   - Broadcaster invoice telecast/annexure row extraction
+   - Monitoring report full table extraction
+   - Media Estimate/Schedule backend parser
+   - OCR fallback for scanned PDFs
+
+5. Configure shared cloud storage:
+   Add DATABASE_URL or POSTGRES_URL in Vercel environment variables if saved cases need to be shared between users and browsers.
+
+6. After every parser improvement:
+   - Deploy to Vercel
+   - Upload the same golden PDFs again
+   - Compare dashboard rows against the correct Excel output
+   - Record missing fields and wrong values before the next parser update
