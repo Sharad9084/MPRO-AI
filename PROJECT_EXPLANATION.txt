@@ -70,7 +70,8 @@ The intake asks for source type, agency name, medium, advertiser name, campaign 
 Agency and advertiser inputs support existing values and new typed values; new values are remembered for future uploads.
 Source type is single-choice and follows the source sequence: Media Estimate/Schedule, Agency Invoice, Broadcaster / 3rd Party / Channel Invoice, 3rd Party Monitoring, and Purchase Order.
 The upload intake accepts PDF files only in the current UI.
-PDF extraction runs in the browser through PDF.js, so it does not require the local /api/extract_pdf backend route.
+PDF extraction now tries the deployed /api/extract backend first, using the integrated MPro PDF extraction engine for PO, Agency Invoice, Broadcaster / 3rd Party / Channel Invoice, and 3rd Party Monitoring files.
+If the extraction API is unavailable, the frontend falls back to browser PDF.js parsing for direct-file or offline testing.
 Text-based PDFs can be parsed directly. Scanned/image-only PDFs still need OCR before field extraction can be reliable.
 The upload intake supports selecting multiple PDF files at once.
 New PDF uploads append to the existing rows instead of replacing older uploaded data, so the workspace can grow continuously as more files arrive.
@@ -171,6 +172,7 @@ For deployed Vercel domains, sign-in now reports a cloud database error when Pos
 
 Vercel backend routes:
 - GET /api/health
+- POST /api/extract
 - POST /api/auth/signup
 - POST /api/auth/signin
 - POST /api/auth/signout

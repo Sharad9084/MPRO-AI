@@ -17,6 +17,8 @@ For local development or direct-file testing without a reachable backend API, th
 
 On Vercel, this repository now includes Python Functions under `api/` for shared backend access. Vercel will not run `backend/server.py` as a persistent Python server; instead `/api/*` routes call the PostgreSQL backend logic per request.
 
+PDF uploads call the integrated `/api/extract` Python Function first. That route uses the bundled `extractor/` package from the MPro PDF extraction engine and returns structured JSON rows for the frontend tables. If the route is not reachable during local/direct-file testing, the browser PDF.js parser is used as a fallback.
+
 For shared cloud cases, add a hosted PostgreSQL connection string in Vercel environment variables, then redeploy. Supported names are `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `NEON_DATABASE_URL`, or `SUPABASE_DB_URL`.
 
 ## SQL Mode
@@ -67,6 +69,7 @@ DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
 ```
 
 The frontend calls same-domain API routes such as `/api/auth/signin` and `/api/cases`. If a deployed Vercel site does not have PostgreSQL configured, sign-in shows a cloud database error instead of silently behaving like shared storage.
+The frontend also calls `/api/extract` for PDF extraction; this route does not require PostgreSQL.
 
 Recommended Vercel setup:
 
@@ -117,4 +120,4 @@ Use these files to test the upload boxes:
 - `sample-program.csv`
 - `sample-pr.csv`
 
-PDF files can be selected and will be tracked as pending extractor integration. The next step is connecting the existing PDF extractor API so PDF rows load automatically.
+PDF files are sent to `/api/extract` when available and extracted rows load automatically into the selected table. Browser PDF.js extraction remains as a fallback for local/direct-file testing.

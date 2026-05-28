@@ -260,6 +260,20 @@ const SOURCE_TYPE_LABELS = {
   po: "Purchase Order",
 };
 
+const EXTRACTOR_SOURCE_TYPES = {
+  po: "po",
+  agency: "agency_invoice",
+  thirdPartyInvoice: "broadcaster_invoice",
+  thirdPartyMonitoring: "monitoring_report",
+};
+
+const APP_SOURCE_TYPES = {
+  po: "po",
+  agency_invoice: "agency",
+  broadcaster_invoice: "thirdPartyInvoice",
+  monitoring_report: "thirdPartyMonitoring",
+};
+
 const FILTER_DEFS = [
   { key: "brand", label: "Brand" },
   { key: "advertiser", label: "Advertiser" },
@@ -980,7 +994,7 @@ async function importUnifiedSourceFiles() {
   try {
     const imported = [];
     for (const file of files) {
-      const parsed = await parseFileForSource(file, sourceKey);
+      const parsed = await parseFileForSource(file, sourceKey, metadata);
       imported.push(...applyUploadMetadata(parsed.rows, sourceKey, metadata));
     }
     state.datasets[sourceKey] = [...(state.datasets[sourceKey] || []), ...imported];
@@ -1136,10 +1150,10 @@ function renderMasterOptionDatalists() {
   if (advertiserList) advertiserList.innerHTML = (state.masterOptions.advertisers || []).map((value) => `<option value="${escapeHTML(value)}"></option>`).join("");
 }
 
-async function parseFileForSource(file, sourceKey) {
+async function parseFileForSource(file, sourceKey, metadata = {}) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf")) {
-    const extracted = await extractPdfFiles([file], sourceKey);
+    const extracted = await extractPdfFiles([file], sourceKey, metadata);
     const rows = extracted.datasets?.[sourceKey] || [];
     if (!rows.length) return makePdfPlaceholderRows(file, sourceKey);
     return normalizeRows(rows, sourceKey, file.name);
@@ -1157,16 +1171,23 @@ function makePdfPlaceholderRows(file, sourceKey) {
   return normalizeRows([row], sourceKey, file.name);
 }
 
-async function extractPdfFiles(files, sourceHint = "") {
+async function extractPdfFiles(files, sourceHint = "", metadata = {}) {
   const uploadFiles = files.filter((file) => /\.pdf$/i.test(file.name));
   if (!uploadFiles.length) throw new Error("Select PDF files for PDF extraction.");
   const datasets = { po: [], mediaSchedule: [], agency: [], thirdPartyInvoice: [], thirdPartyMonitoring: [] };
   for (const file of uploadFiles) {
+    const sourceKey = sourceHint || "";
+    const apiResult = await extractPdfFileViaApi(file, sourceKey, metadata);
+    if (apiResult.ok) {
+      datasets[apiResult.sourceKey].push(...apiResult.rows);
+      continue;
+    }
+
     const text = await extractPdfTextInBrowser(file);
-    const sourceKey = sourceHint || classifyPdfDocument(file.name, text);
-    const rows = extractRowsFromPdfText(sourceKey, text, file.name);
-    addPdfMetadata(rows, sourceKey, text, file.name);
-    datasets[sourceKey].push(...(rows.length ? rows : [makePdfReviewRow(sourceKey, file.name, text ? "No confident rows extracted" : "No selectable PDF text found")]));
+    const fallbackSourceKey = sourceKey || classifyPdfDocument(file.name, text);
+    const rows = extractRowsFromPdfText(fallbackSourceKey, text, file.name);
+    addPdfMetadata(rows, fallbackSourceKey, text, file.name);
+    datasets[fallbackSourceKey].push(...(rows.length ? rows : [makePdfReviewRow(fallbackSourceKey, file.name, text ? "No confident rows extracted" : "No selectable PDF text found")]));
   }
   return {
     datasets,
@@ -1175,6 +1196,65 @@ async function extractPdfFiles(files, sourceHint = "") {
       rows: Object.values(datasets).reduce((total, rows) => total + rows.length, 0),
     },
   };
+}
+
+async function extractPdfFileViaApi(file, sourceKey, metadata = {}) {
+  if (!EXTRACTOR_SOURCE_TYPES[sourceKey]) return { ok: false };
+  const body = new FormData();
+  body.append("file", file, file.name);
+  body.append("source_type", EXTRACTOR_SOURCE_TYPES[sourceKey]);
+  body.append("agency_name", metadata.agency || "");
+  body.append("medium", metadata.medium || "");
+  body.append("advertiser_name", metadata.advertiser || "");
+  body.append("campaign_period", metadata.campaignPeriod || "");
+
+  for (const url of extractorApiUrls()) {
+    try {
+      const response = await fetchWithTimeout(url, { method: "POST", body }, 60000);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) continue;
+      const resolvedSourceKey = APP_SOURCE_TYPES[payload.sourceType] || sourceKey;
+      return {
+        ok: true,
+        sourceKey: resolvedSourceKey,
+        rows: normalizeExtractorApiRows(payload.rows || [], resolvedSourceKey, file.name, payload),
+      };
+    } catch {
+      // Try the next endpoint candidate, then fall back to browser extraction.
+    }
+  }
+  return { ok: false };
+}
+
+function extractorApiUrls() {
+  const cleanBase = String(API_BASE || "").replace(/\/+$/, "");
+  if (!cleanBase) return ["/api/extract", "/extract"];
+  if (cleanBase.endsWith("/api")) return [`${cleanBase}/extract`];
+  return Array.from(new Set([`${cleanBase}/api/extract`, `${cleanBase}/extract`]));
+}
+
+function normalizeExtractorApiRows(rows, sourceKey, fileName, payload = {}) {
+  const baseRows = rows.length ? rows : [makePdfReviewRow(sourceKey, fileName, "No rows extracted by API")];
+  return baseRows.map((row) => {
+    const next = { ...row };
+    next["File Name"] = next["File Name"] || next["PDF File Name"] || fileName;
+    next.Status = next.Status || next["Extraction Status"] || "Extracted - review";
+    next["Parser Confidence"] = next["Parser Confidence"] || payload.confidence || "";
+    next.Template = next.Template || payload.template || "";
+    if (next["Brand Name"] && !next.Brand) next.Brand = next["Brand Name"];
+    if (sourceKey === "po" && next.Description && !next["Campaign Name"]) {
+      next["Campaign Name"] = next.Description;
+    }
+    if (sourceKey === "thirdPartyInvoice" && next["Broadcaster Name"] && !next["Third Party Vendor Name"]) {
+      next["Third Party Vendor Name"] = next["Broadcaster Name"];
+    }
+    if (sourceKey === "thirdPartyInvoice" && next["Final Amount INR"] && !next["Calculated Amount INR"]) {
+      next["Calculated Amount INR"] = next["Final Amount INR"];
+    }
+    if (payload.warnings?.length) next["Extractor Warnings"] = payload.warnings.join("; ");
+    if (payload.missingFields?.length) next["Missing Fields"] = payload.missingFields.join(", ");
+    return next;
+  });
 }
 
 async function extractPdfTextInBrowser(file) {
