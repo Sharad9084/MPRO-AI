@@ -26,7 +26,8 @@ def extract_pdf(
     if pdf_path.suffix.lower() != ".pdf":
         raise ValueError("Only PDF files are supported.")
 
-    ensure_storage_dirs()
+    if save_debug:
+        ensure_storage_dirs()
     metadata = metadata or UploadMetadata()
     pdf_text = extract_pdf_text(pdf_path)
     resolved_source_type = detect_source_type(pdf_path.name, pdf_text.text) if source_type == "auto" else source_type
