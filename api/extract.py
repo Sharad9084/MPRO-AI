@@ -21,7 +21,7 @@ def send_json(handler, status, payload):
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
     handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
     handler.end_headers()
     handler.wfile.write(body)
@@ -30,7 +30,7 @@ def send_json(handler, status, payload):
 def options(handler):
     handler.send_response(204)
     handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
     handler.end_headers()
 
@@ -65,6 +65,19 @@ def form_value(fields, key, default=""):
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         options(self)
+
+    def do_GET(self):
+        send_json(
+            self,
+            200,
+            {
+                "ok": True,
+                "service": "MPro PDF extraction API",
+                "method": "POST",
+                "message": "Upload a PDF from the TAG-mPRO frontend or send multipart/form-data with file and source_type.",
+                "sourceTypes": ["po", "agency_invoice", "broadcaster_invoice", "monitoring_report", "auto"],
+            },
+        )
 
     def do_POST(self):
         content_type = self.headers.get("Content-Type", "")
