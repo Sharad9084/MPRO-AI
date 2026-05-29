@@ -264,3 +264,28 @@ Recommended next steps:
    - Upload the same golden PDFs again
    - Compare dashboard rows against the correct Excel output
    - Record missing fields and wrong values before the next parser update
+
+Recent Feature Additions (May 2026):
+====================================
+1. Metadata & System Columns Excluded:
+   Metadata/system-related columns (e.g. Source, Import ID, Document Type, File Name, Status, Parser Confidence, Quality Issues) are completely filtered out from the table grids and Columns settings panels. Only the columns relevant to actual imported/fetched spreadsheet columns are shown.
+2. Source Suffix badges on Columns:
+   Column headers now show suffix badges indicating their primary source document:
+   - CMP: Campaign
+   - PR: Purchase Requisition
+   - PI: Purchase Order
+   - MEI: Media Estimate/Schedule
+   - AGI: Agency Invoice
+   - BRI: Publisher Invoice
+   - MOI: 3rd Party Monitoring Report
+3. Cross-Table Data Enrichment (Auto-Fill + Color Highlight):
+   Missing fields in rows are automatically populated based on matching link keys (PO Number, PR Number, Campaign ID) from other source documents.
+   - Enriched cells are highlighted with a soft yellow background, left orange border, italic font, and a bottom-right source badge.
+   - Manual editing on these cells overwrites the auto-fill and writes directly to the dataset.
+4. Auto-Saving & Multi-Device Sync:
+   - Auto-save is triggered on any data modifications, saving to browser cache and running debounced background saves to the database/API.
+   - Cross-device sync check compares timestamps of the local browser cache and database on startup and loads the most recent version.
+5. "Clear all data" Action:
+   - A confirmation-guarded "Clear all data" button is available in the table actions bar to completely empty the workspace and clear local drafts.
+6. Optional Upload Dates:
+   - Campaign Start and End Dates are no longer required fields during PDF uploads.
