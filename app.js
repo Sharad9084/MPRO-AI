@@ -2920,7 +2920,17 @@ function makeColumnHeader(column) {
   title.className = "th-title";
   title.textContent = column;
 
-  const suffix = COLUMN_TO_SUFFIX[column];
+  let suffix = null;
+  const activeView = state.activeView;
+  if (SOURCE_CONFIG[activeView]) {
+    if (SOURCE_CONFIG[activeView].columns.includes(column)) {
+      suffix = SOURCE_SUFFIX[activeView];
+    }
+  }
+  if (!suffix) {
+    suffix = COLUMN_TO_SUFFIX[column];
+  }
+
   let suffixSpan = null;
   if (suffix) {
     suffixSpan = document.createElement("span");
