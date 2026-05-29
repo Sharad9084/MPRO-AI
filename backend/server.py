@@ -4,11 +4,27 @@ import hmac
 import re
 import secrets
 import sqlite3
+import sys
+import tempfile
 import uuid
 from datetime import datetime, timedelta, timezone
+from email.parser import BytesParser
+from email.policy import default
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+
+# Add project root to path so extractor package is importable
+_SERVER_ROOT = Path(__file__).resolve().parents[1]
+if str(_SERVER_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SERVER_ROOT))
+
+try:
+    from extractor.engine import extract_pdf, result_to_dict
+    from extractor.schemas import UploadMetadata
+    _EXTRACTOR_AVAILABLE = True
+except Exception:
+    _EXTRACTOR_AVAILABLE = False
 
 
 ROOT = Path(__file__).resolve().parent
@@ -588,7 +604,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
-            json_response(self, 200, {"ok": True, "database": str(DB_PATH)})
+            json_response(self, 200, {"ok": True, "database": str(DB_PATH), "extractor": _EXTRACTOR_AVAILABLE})
+        elif path == "/api/extract":
+            json_response(self, 200, {"ok": True, "service": "MPro PDF extraction API", "available": _EXTRACTOR_AVAILABLE})
         elif path == "/api/cases":
             if not require_user(self):
                 json_response(self, 401, {"error": "Unauthorized"})
@@ -627,8 +645,60 @@ class Handler(BaseHTTPRequestHandler):
                 json_response(self, 200, {"case": case})
             except Exception as exc:
                 json_response(self, 500, {"error": str(exc)})
+        elif path == "/api/extract":
+            self._handle_extract()
         else:
             json_response(self, 404, {"error": "Not found"})
+
+    def _handle_extract(self):
+        if not _EXTRACTOR_AVAILABLE:
+            json_response(self, 503, {"error": "Extractor not available. Install pdfplumber and pypdf."})
+            return
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            json_response(self, 400, {"error": "Upload a PDF using multipart/form-data."})
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            message = BytesParser(policy=default).parsebytes(
+                b"Content-Type: " + content_type.encode("utf-8") + b"\r\nMIME-Version: 1.0\r\n\r\n" + raw_body
+            )
+            fields = {}
+            files = {}
+            for part in message.iter_parts():
+                name = part.get_param("name", header="content-disposition")
+                if not name:
+                    continue
+                filename = part.get_filename()
+                payload = part.get_payload(decode=True) or b""
+                if filename:
+                    files[name] = {"filename": Path(filename).name, "content": payload}
+                else:
+                    fields[name] = payload.decode("utf-8", errors="replace").strip()
+
+            file_item = files.get("file")
+            if not file_item or not file_item.get("filename"):
+                json_response(self, 400, {"error": "PDF file is required."})
+                return
+            filename = file_item["filename"]
+            if not filename.lower().endswith(".pdf"):
+                json_response(self, 400, {"error": "Only PDF files are supported."})
+                return
+
+            metadata = UploadMetadata(
+                agency_name=fields.get("agency_name", ""),
+                medium=fields.get("medium", ""),
+                advertiser_name=fields.get("advertiser_name", ""),
+                campaign_period=fields.get("campaign_period", ""),
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                pdf_path = Path(tmp) / filename
+                pdf_path.write_bytes(file_item["content"])
+                result = extract_pdf(pdf_path, source_type=fields.get("source_type", "auto") or "auto", metadata=metadata, save_debug=False)
+            json_response(self, 200, result_to_dict(result))
+        except Exception as exc:
+            json_response(self, 500, {"error": str(exc)})
 
 
 if __name__ == "__main__":

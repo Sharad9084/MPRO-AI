@@ -1,7 +1,7 @@
 const STORAGE_KEYS = {
   session: "mpro.session.v3",
-  cases: "mpro.reconciliation.cases.v1",
-  activeCase: "mpro.activeCase.v1",
+  cases: "mpro.reconciliation.cases.v2",
+  activeCase: "mpro.activeCase.v2",
   accountingFilters: "mpro.accountingFilters.v3",
   globalFilters: "mpro.globalFilters.v3",
   localUsers: "mpro.localUsers.v1",
@@ -224,6 +224,88 @@ const SOURCE_CONFIG = {
     ],
   },
 };
+
+// Suffix shown in column headers to identify which source document the data belongs to
+const SOURCE_SUFFIX = {
+  agency: "AGI",
+  thirdPartyInvoice: "BRI",
+  po: "PI",
+  thirdPartyMonitoring: "MOI",
+  mediaSchedule: "MEI",
+  program: "CMP",
+  pr: "PR",
+};
+
+const COLUMN_TO_SUFFIX = {
+  "Campaign ID": "CMP",
+  "Campaign Name": "CMP",
+  "Campaign Type": "CMP",
+  "Campaign Manager": "CMP",
+  "Program Name": "CMP",
+  "Budget": "CMP",
+  "Program Manager": "CMP",
+  "PR Number": "PR",
+  "PR Date": "PR",
+  "PR Description": "PR",
+  "Vendor Name": "PR",
+  "PR Amount": "PR",
+  "PO Number": "PI",
+  "PO Date": "PI",
+  "PO Amount Incl Tax": "PI",
+  "Medium": "PI",
+  "Brand": "PI",
+  "Brand Name": "PI",
+  "Advertiser Name": "PI",
+  "Campaign Start Date": "PI",
+  "Campaign End Date": "PI",
+  "Channel Name": "MEI",
+  "Spots": "MEI",
+  "Rate INR": "MEI",
+  "Planned Amount": "MEI",
+  "Agency Name": "AGI",
+  "Invoice Number": "AGI",
+  "Invoice Date": "AGI",
+  "Campaign Period": "AGI",
+  "Estimate Number": "AGI",
+  "Estimate Period": "AGI",
+  "Total Value Including Taxes": "AGI",
+  "Time Band": "AGI",
+  "Broadcaster Name": "AGI",
+  "Date Wise Spots": "AGI",
+  "Spot Duration": "AGI",
+  "Spot Rate Per 10 Sec": "AGI",
+  "Net Cost": "AGI",
+  "Third Party Vendor Name": "BRI",
+  "Billing Period": "BRI",
+  "TP": "BRI",
+  "Calculated Amount INR": "BRI",
+  "Proof of Performance": "MOI",
+  "Expense Monitoring": "MOI",
+  "Monitoring Status": "MOI",
+  "Program": "BRI",
+  "Date": "BRI",
+  "Day": "BRI",
+  "Air Time": "BRI",
+  "Duration Sec": "BRI",
+  "Spot Copy Caption": "BRI",
+};
+
+// Columns hidden by default across all source views (user can unhide via Columns button)
+const DEFAULT_HIDDEN_COLUMNS = [
+  "Source",
+  "File Name",
+  "Status",
+  "Import ID",
+  "Document Type",
+  "Source Type",
+  "PDF File Name",
+  "Extraction Review",
+  "Parser Confidence",
+  "Quality Issues",
+];
+
+// Keys used to link rows across different source tables for cross-fill
+const CROSS_LINK_KEYS = ["PO Number", "PR Number", "Campaign ID"];
 
 const GLOBAL_FILTERS = [
   "campaign",
@@ -552,6 +634,7 @@ const state = {
   columnWidths: {},
   hiddenColumns: {},
   sort: { column: null, direction: "asc" },
+  columnFilters: {},
   globalFilters: {},
   accountingFilters: {},
   searchQuery: "",
@@ -635,6 +718,10 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     if (event.target.closest(".search-filter")) return;
     $$(".search-filter.is-open").forEach((item) => item.classList.remove("is-open"));
+    // Close column filter dropdowns if click outside
+    if (!event.target.closest(".col-filter-wrap") && !event.target.closest(".col-filter-dropdown")) {
+      closeAllColFilterDropdowns();
+    }
   });
 }
 
@@ -683,7 +770,7 @@ function signedInLabel() {
 }
 
 function visibleView(view) {
-  return ["program", "po", "mediaSchedule", "agency", "thirdPartyInvoice"].includes(view) ? view : "agency";
+  return ["program", "po", "mediaSchedule", "agency", "thirdPartyInvoice", "thirdPartyMonitoring"].includes(view) ? view : "agency";
 }
 
 async function handleLogin(event) {
@@ -927,6 +1014,7 @@ function startNewCase() {
   state.searchQuery = "";
   $("#table-search").value = "";
   state.activeView = "agency";
+  ensureDefaultHiddenColumns();
   $("#campaign-choice").classList.add("hidden");
   $("#campaign-panel").classList.remove("hidden");
   $("#existing-list").classList.add("hidden");
@@ -976,7 +1064,17 @@ function hydrateCase(caseItem) {
   state.hiddenColumns = caseItem.hiddenColumns || {};
   state.sort = caseItem.sort || { column: null, direction: "asc" };
   state.activeView = visibleView(caseItem.activeView);
+  ensureDefaultHiddenColumns();
   refreshMasterOptionsFromDatasets();
+}
+
+// Sets DEFAULT_HIDDEN_COLUMNS for any view not yet explicitly configured by user
+function ensureDefaultHiddenColumns() {
+  Object.keys(SOURCE_CONFIG).forEach((view) => {
+    if (!Object.prototype.hasOwnProperty.call(state.hiddenColumns, view)) {
+      state.hiddenColumns[view] = [...DEFAULT_HIDDEN_COLUMNS];
+    }
+  });
 }
 
 async function importUnifiedSourceFiles() {
@@ -2217,13 +2315,27 @@ function renderGrid() {
         text.className = ["Reconciliation Status", "Status"].includes(column) ? `status-pill ${normalizeKey(value).replace(/\s+/g, "-")}` : "cell-text";
         text.textContent = value;
         td.appendChild(text);
+
+        if (row.__crossFills && row.__crossFills[column]) {
+          const filler = row.__crossFills[column];
+          const suffix = SOURCE_SUFFIX[filler] || filler.toUpperCase();
+          td.classList.add("cross-filled");
+          td.title = `Auto-filled from: ${SOURCE_CONFIG[filler]?.label || filler} (${suffix})`;
+
+          const badge = document.createElement("span");
+          badge.className = "cross-filled-badge";
+          badge.textContent = suffix;
+          td.appendChild(badge);
+        }
+
         tr.appendChild(td);
         return;
       }
       const input = document.createElement("input");
       input.value = row[column] || "";
       input.addEventListener("input", () => {
-        row[column] = input.value;
+        const targetRow = row.__originalRow || row;
+        targetRow[column] = input.value;
         state.dirty = true;
         $("#save-status").textContent = "Unsaved changes";
       });
@@ -2232,6 +2344,19 @@ function renderGrid() {
         renderAll();
       });
       td.appendChild(input);
+
+      if (row.__crossFills && row.__crossFills[column]) {
+        const filler = row.__crossFills[column];
+        const suffix = SOURCE_SUFFIX[filler] || filler.toUpperCase();
+        td.classList.add("cross-filled");
+        td.title = `Auto-filled from: ${SOURCE_CONFIG[filler]?.label || filler} (${suffix})`;
+
+        const badge = document.createElement("span");
+        badge.className = "cross-filled-badge";
+        badge.textContent = suffix;
+        td.appendChild(badge);
+      }
+
       tr.appendChild(td);
     });
     const deleteCell = document.createElement("td");
@@ -2255,9 +2380,157 @@ function getActiveRows() {
   return state.datasets[state.activeView] || [];
 }
 
+// Feature 3: Cross-Table Data Enrichment (Auto-Fill + Highlight)
+function buildCrossRefIndex() {
+  const index = {
+    byPo: new Map(),
+    byPr: new Map(),
+    byCampaign: new Map(),
+  };
+
+  Object.entries(state.datasets).forEach(([sourceKey, rows]) => {
+    if (!rows || !Array.isArray(rows)) return;
+    rows.forEach((row) => {
+      // 1. PO Number
+      const poVal = String(row["PO Number"] || "").trim().toUpperCase();
+      if (poVal) {
+        if (!index.byPo.has(poVal)) index.byPo.set(poVal, []);
+        index.byPo.get(poVal).push({ sourceKey, row });
+      }
+
+      // 2. PR Number
+      const prVal = String(row["PR Number"] || "").trim().toUpperCase();
+      if (prVal) {
+        if (!index.byPr.has(prVal)) index.byPr.set(prVal, []);
+        index.byPr.get(prVal).push({ sourceKey, row });
+      }
+
+      // 3. Campaign ID
+      const cmpVal = String(row["Campaign ID"] || "").trim().toUpperCase();
+      if (cmpVal) {
+        if (!index.byCampaign.has(cmpVal)) index.byCampaign.set(cmpVal, []);
+        index.byCampaign.get(cmpVal).push({ sourceKey, row });
+      }
+    });
+  });
+
+  return index;
+}
+
+function findMatches(row, index, currentSourceKey) {
+  const matches = [];
+  const seenRows = new Set();
+
+  const addMatchesFromList = (list) => {
+    if (!list) return;
+    list.forEach(({ sourceKey: matchSourceKey, row: matchRow }) => {
+      if (matchSourceKey === currentSourceKey) return;
+      if (matchRow === row || (matchRow.__rowId && matchRow.__rowId === row.__rowId)) return;
+      if (seenRows.has(matchRow)) return;
+      seenRows.add(matchRow);
+      matches.push({ sourceKey: matchSourceKey, row: matchRow });
+    });
+  };
+
+  // 1. PO Number Match
+  const poVal = String(row["PO Number"] || "").trim().toUpperCase();
+  if (poVal) {
+    addMatchesFromList(index.byPo.get(poVal));
+  }
+
+  // 2. PR Number Match
+  const prVal = String(row["PR Number"] || "").trim().toUpperCase();
+  if (prVal) {
+    addMatchesFromList(index.byPr.get(prVal));
+  }
+
+  // 3. Campaign ID Match
+  const cmpVal = String(row["Campaign ID"] || "").trim().toUpperCase();
+  if (cmpVal) {
+    addMatchesFromList(index.byCampaign.get(cmpVal));
+  }
+
+  // Sort matches by SOURCE_PRIORITY
+  const SOURCE_PRIORITY = {
+    po: 1,
+    agency: 2,
+    thirdPartyInvoice: 3,
+    mediaSchedule: 4,
+    thirdPartyMonitoring: 5,
+    pr: 6,
+    program: 7,
+  };
+
+  matches.sort((a, b) => {
+    const priA = SOURCE_PRIORITY[a.sourceKey] || 99;
+    const priB = SOURCE_PRIORITY[b.sourceKey] || 99;
+    return priA - priB;
+  });
+
+  return matches;
+}
+
+function enrichRow(row, sourceKey, index, columns) {
+  const enrichedRow = { ...row };
+  const crossFills = {}; // maps column -> sourceKey
+
+  const hasLinkKey = ["PO Number", "PR Number", "Campaign ID"].some((k) => {
+    const val = row[k];
+    return val !== undefined && val !== null && String(val).trim() !== "";
+  });
+
+  if (!hasLinkKey) {
+    return { enrichedRow, crossFills };
+  }
+
+  const matches = findMatches(row, index, sourceKey);
+  if (!matches.length) {
+    return { enrichedRow, crossFills };
+  }
+
+  const isBlank = (val) => val === undefined || val === null || String(val).trim() === "";
+
+  columns.forEach((column) => {
+    // Avoid cross-filling metadata columns or columns that already have values
+    if (["Source", "File Name", "Status", "Import ID", "Document Type", "Source Type", "PDF File Name", "Extraction Review", "Parser Confidence", "Quality Issues"].includes(column)) return;
+    if (!isBlank(row[column])) return;
+
+    // Find the first match that has a value for this column
+    for (const match of matches) {
+      const matchVal = match.row[column];
+      if (!isBlank(matchVal)) {
+        enrichedRow[column] = matchVal;
+        crossFills[column] = match.sourceKey;
+        break;
+      }
+    }
+  });
+
+  return { enrichedRow, crossFills };
+}
+
 function getFilteredRows() {
   let rows = [...getActiveRows()];
+
+  if (state.activeView !== "reconciliation") {
+    const crossRefIndex = buildCrossRefIndex();
+    const allCols = getActiveColumns(rows, { includeHidden: true });
+    rows = rows.map((row) => {
+      const { enrichedRow, crossFills } = enrichRow(row, state.activeView, crossRefIndex, allCols);
+      enrichedRow.__crossFills = crossFills;
+      enrichedRow.__originalRow = row;
+      return enrichedRow;
+    });
+  }
+
   rows = rows.filter(matchesGlobalFilters).filter(matchesAccountingFilters);
+  // Apply per-column filters
+  const colFilters = state.columnFilters[state.activeView] || {};
+  Object.entries(colFilters).forEach(([col, allowed]) => {
+    if (!allowed || !allowed.length) return;
+    const allowedSet = new Set(allowed);
+    rows = rows.filter((row) => allowedSet.has(String(row[col] || "")));
+  });
   if (state.searchQuery) {
     rows = rows.filter((row) => Object.values(row).some((value) => String(value || "").toLowerCase().includes(state.searchQuery)));
   }
@@ -2506,14 +2779,48 @@ function makeColumnHeader(column) {
   const title = document.createElement("span");
   title.className = "th-title";
   title.textContent = column;
+
+  const suffix = COLUMN_TO_SUFFIX[column];
+  let suffixSpan = null;
+  if (suffix) {
+    suffixSpan = document.createElement("span");
+    suffixSpan.className = "th-suffix";
+    suffixSpan.textContent = suffix;
+    suffixSpan.title = `Source: ${suffix}`;
+  }
+
   const sortMark = document.createElement("span");
-  sortMark.textContent = state.sort.column === column ? (state.sort.direction === "asc" ? "^" : "v") : "";
+  sortMark.textContent = state.sort.column === column ? (state.sort.direction === "asc" ? "▲" : "▼") : "";
+  sortMark.style.fontSize = "9px";
+  sortMark.style.color = "var(--teal)";
+
+  // Filter button
+  const filterWrap = document.createElement("span");
+  filterWrap.className = "col-filter-wrap";
+  const filterBtn = document.createElement("button");
+  filterBtn.type = "button";
+  filterBtn.className = "col-filter-btn";
+  const colFilters = state.columnFilters[state.activeView] || {};
+  const isFiltered = colFilters[column] && colFilters[column].length > 0;
+  if (isFiltered) filterBtn.classList.add("col-filter-active");
+  filterBtn.title = "Filter column";
+  filterBtn.innerHTML = isFiltered ? "▼" : "⌄";
+  filterBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openColFilterDropdown(column, filterBtn, getActiveRows());
+  });
+  filterWrap.appendChild(filterBtn);
+
   const handle = document.createElement("span");
   handle.className = "resize-handle";
-  inner.append(title, sortMark, handle);
+  if (suffixSpan) {
+    inner.append(title, suffixSpan, sortMark, filterWrap, handle);
+  } else {
+    inner.append(title, sortMark, filterWrap, handle);
+  }
   th.appendChild(inner);
   th.addEventListener("click", (event) => {
-    if (event.target === handle) return;
+    if (event.target === handle || event.target.closest(".col-filter-wrap")) return;
     sortBy(column);
   });
   th.addEventListener("dragstart", (event) => event.dataTransfer.setData("text/plain", column));
@@ -2524,6 +2831,154 @@ function makeColumnHeader(column) {
   });
   handle.addEventListener("mousedown", (event) => startResize(event, column, th));
   return th;
+}
+
+// ── Column Filter Dropdown Logic ──────────────────────────────
+let _activeColFilterDropdown = null;
+
+function closeAllColFilterDropdowns() {
+  if (_activeColFilterDropdown) {
+    _activeColFilterDropdown.classList.remove("is-open");
+    _activeColFilterDropdown.style.display = "none";
+    if (_activeColFilterDropdown.parentNode) _activeColFilterDropdown.parentNode.removeChild(_activeColFilterDropdown);
+    _activeColFilterDropdown = null;
+  }
+}
+
+function openColFilterDropdown(column, anchorBtn, allRows) {
+  // Close any open dropdown first
+  if (_activeColFilterDropdown) {
+    const wasThisOne = _activeColFilterDropdown.dataset.colFilterFor === column;
+    closeAllColFilterDropdowns();
+    if (wasThisOne) return;
+  }
+
+  // Build unique sorted values from ALL rows for this column
+  const allValues = [...new Set(allRows.map((row) => String(row[column] || "")).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+  const colFilters = state.columnFilters[state.activeView] || {};
+  const currentSelected = new Set(colFilters[column] || allValues);
+  const isAllSelected = colFilters[column] == null;
+
+  // Create dropdown element
+  const dropdown = document.createElement("div");
+  dropdown.className = "col-filter-dropdown is-open";
+  dropdown.dataset.colFilterFor = column;
+  _activeColFilterDropdown = dropdown;
+  document.body.appendChild(dropdown);
+
+  // Sort section
+  const sortSection = document.createElement("div");
+  sortSection.className = "col-filter-sort-section";
+  const sortAsc = document.createElement("button");
+  sortAsc.type = "button";
+  sortAsc.className = "col-filter-sort-btn";
+  sortAsc.innerHTML = `<span class="col-filter-sort-icon">↑</span> Sort A → Z`;
+  sortAsc.addEventListener("click", () => { sortBy(column); if (state.sort.direction !== "asc") sortBy(column); closeAllColFilterDropdowns(); });
+  const sortDesc = document.createElement("button");
+  sortDesc.type = "button";
+  sortDesc.className = "col-filter-sort-btn";
+  sortDesc.innerHTML = `<span class="col-filter-sort-icon">↓</span> Sort Z → A`;
+  sortDesc.addEventListener("click", () => { if (state.sort.column === column && state.sort.direction === "desc") { /* already */ } else { state.sort = { column, direction: "desc" }; renderGrid(); } closeAllColFilterDropdowns(); });
+  sortSection.append(sortAsc, sortDesc);
+  dropdown.appendChild(sortSection);
+
+  // Search section
+  const searchSection = document.createElement("div");
+  searchSection.className = "col-filter-search-section";
+  const searchInput = document.createElement("input");
+  searchInput.type = "text";
+  searchInput.className = "col-filter-search-input";
+  searchInput.placeholder = "Search values...";
+  searchSection.appendChild(searchInput);
+  dropdown.appendChild(searchSection);
+
+  // Values list
+  const listWrap = document.createElement("div");
+  listWrap.className = "col-filter-list";
+  dropdown.appendChild(listWrap);
+
+  // Temporary selection state
+  const tempSelected = new Set(isAllSelected ? allValues : (colFilters[column] || []));
+
+  function renderValueList(query) {
+    listWrap.innerHTML = "";
+    const filtered = allValues.filter((v) => v.toLowerCase().includes(query.toLowerCase()));
+    if (!filtered.length) {
+      const empty = document.createElement("div");
+      empty.className = "col-filter-empty";
+      empty.textContent = "No values found";
+      listWrap.appendChild(empty);
+      return;
+    }
+    // Select All
+    const allOpt = document.createElement("label");
+    allOpt.className = "col-filter-option";
+    const allChk = document.createElement("input");
+    allChk.type = "checkbox";
+    const visibleSelected = filtered.filter((v) => tempSelected.has(v));
+    allChk.checked = visibleSelected.length === filtered.length;
+    allChk.indeterminate = visibleSelected.length > 0 && visibleSelected.length < filtered.length;
+    const allLbl = document.createElement("span");
+    allLbl.textContent = "(Select All)";
+    allChk.addEventListener("change", () => {
+      if (allChk.checked) filtered.forEach((v) => tempSelected.add(v));
+      else filtered.forEach((v) => tempSelected.delete(v));
+      renderValueList(searchInput.value);
+    });
+    allOpt.append(allChk, allLbl);
+    listWrap.appendChild(allOpt);
+
+    filtered.forEach((value) => {
+      const label = document.createElement("label");
+      label.className = "col-filter-option";
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.checked = tempSelected.has(value);
+      const lbl = document.createElement("span");
+      lbl.textContent = value || "(blank)";
+      chk.addEventListener("change", () => {
+        if (chk.checked) tempSelected.add(value);
+        else tempSelected.delete(value);
+        renderValueList(searchInput.value);
+      });
+      label.append(chk, lbl);
+      listWrap.appendChild(label);
+    });
+  }
+
+  renderValueList("");
+  searchInput.addEventListener("input", () => renderValueList(searchInput.value));
+
+  // Footer
+  const footer = document.createElement("div");
+  footer.className = "col-filter-footer";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "col-filter-cancel";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => closeAllColFilterDropdowns());
+  const okBtn = document.createElement("button");
+  okBtn.type = "button";
+  okBtn.className = "col-filter-ok";
+  okBtn.textContent = "OK";
+  okBtn.addEventListener("click", () => {
+    if (!state.columnFilters[state.activeView]) state.columnFilters[state.activeView] = {};
+    // If all values selected, clear filter (no restriction)
+    if (tempSelected.size === allValues.length) {
+      delete state.columnFilters[state.activeView][column];
+    } else {
+      state.columnFilters[state.activeView][column] = [...tempSelected];
+    }
+    closeAllColFilterDropdowns();
+    renderGrid();
+  });
+  footer.append(cancelBtn, okBtn);
+  dropdown.appendChild(footer);
+
+  // Position the dropdown under the button
+  const rect = anchorBtn.getBoundingClientRect();
+  dropdown.style.top = `${rect.bottom + 4}px`;
+  dropdown.style.left = `${Math.min(rect.left, window.innerWidth - 250)}px`;
 }
 
 function startResize(event, column, th) {
