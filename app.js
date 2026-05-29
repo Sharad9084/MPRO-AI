@@ -449,7 +449,7 @@ const HELP_CONTENT = {
   },
   unifiedUpload: {
     title: "Upload PDF Source File",
-    lines: ["Select one source type at a time.", "Agency, medium, advertiser and campaign dates are required.", "New agency or advertiser names are remembered for future uploads."],
+    lines: ["Select one source type at a time.", "Agency, medium, and advertiser are required.", "New agency or advertiser names are remembered for future uploads."],
   },
 };
 
@@ -663,8 +663,32 @@ async function loadState() {
   state.globalFilters = keepKnownFilters(readJSON(STORAGE_KEYS.globalFilters, {}), GLOBAL_FILTERS);
   state.accountingFilters = keepKnownFilters(readJSON(STORAGE_KEYS.accountingFilters, {}), FILTER_DEFS.map((item) => item.key));
   state.masterOptions = { agencies: [], advertisers: [], ...readJSON(STORAGE_KEYS.masterOptions, {}) };
-  const active = getActiveCase();
-  if (active) hydrateCase(active);
+
+  const draftStr = localStorage.getItem("mpro.draft.state");
+  if (draftStr) {
+    try {
+      const draft = JSON.parse(draftStr);
+      state.activeCaseId = draft.activeCaseId;
+      state.datasets = draft.datasets || emptyDatasets();
+      state.columnOrders = draft.columnOrders || {};
+      state.columnWidths = draft.columnWidths || {};
+      state.hiddenColumns = draft.hiddenColumns || {};
+      state.sort = draft.sort || { column: null, direction: "asc" };
+      state.activeView = draft.activeView || "agency";
+      if (draft.campaignName && $("#campaign-name")) {
+        $("#campaign-name").value = draft.campaignName;
+      }
+      deriveProgramAndPrRows();
+    } catch (e) {
+      console.error("Failed to parse draft state", e);
+      const active = getActiveCase();
+      if (active) hydrateCase(active);
+    }
+  } else {
+    const active = getActiveCase();
+    if (active) hydrateCase(active);
+  }
+
   refreshMasterOptionsFromCases();
   refreshMasterOptionsFromDatasets();
 }
@@ -704,6 +728,12 @@ function bindEvents() {
   $("#column-settings").addEventListener("click", toggleColumnPanel);
   $("#export-csv").addEventListener("click", exportCsv);
   $("#save-campaign").addEventListener("click", saveCase);
+  $("#clear-all-data")?.addEventListener("click", clearAllData);
+  $("#campaign-name")?.addEventListener("input", () => {
+    state.dirty = true;
+    $("#save-status").textContent = "Unsaved changes";
+    saveDraftState();
+  });
   $("#clear-accounting-filters").addEventListener("click", clearAccountingFilters);
   $("#table-search").addEventListener("input", (event) => {
     state.searchQuery = event.target.value.trim().toLowerCase();
@@ -1167,8 +1197,9 @@ function validateUploadMetadata(sourceKey, files, metadata) {
   if (!metadata.agency) return "Agency name is required.";
   if (!metadata.medium) return "Medium is required.";
   if (!metadata.advertiser) return "Advertiser name is required.";
-  if (!metadata.campaignStartDate || !metadata.campaignEndDate) return "Campaign start and end dates are required.";
-  if (metadata.campaignEndDate < metadata.campaignStartDate) return "Campaign end date must be after the start date.";
+  if (metadata.campaignEndDate && metadata.campaignStartDate && metadata.campaignEndDate < metadata.campaignStartDate) {
+    return "Campaign end date must be after the start date.";
+  }
   return "";
 }
 
@@ -1832,6 +1863,33 @@ function addRow() {
   renderAll();
 }
 
+function saveDraftState() {
+  const draft = {
+    activeCaseId: state.activeCaseId,
+    campaignName: $("#campaign-name")?.value || "",
+    datasets: state.datasets,
+    columnOrders: state.columnOrders,
+    columnWidths: state.columnWidths,
+    hiddenColumns: state.hiddenColumns,
+    sort: state.sort,
+    activeView: state.activeView,
+  };
+  localStorage.setItem("mpro.draft.state", JSON.stringify(draft));
+}
+
+function clearAllData() {
+  if (!confirm("Are you sure you want to clear all data? This will empty the current workspace.")) return;
+  state.datasets = emptyDatasets();
+  state.activeCaseId = null;
+  localStorage.removeItem("mpro.draft.state");
+  localStorage.removeItem(STORAGE_KEYS.activeCase);
+  if ($("#campaign-name")) $("#campaign-name").value = "";
+  state.dirty = false;
+  deriveProgramAndPrRows();
+  renderAll();
+  toast("All data cleared from workspace.");
+}
+
 async function saveCase() {
   const name = $("#campaign-name").value.trim() || "Untitled reconciliation";
   const caseItem = {
@@ -2372,6 +2430,7 @@ function renderGrid() {
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
+  saveDraftState();
 }
 
 function getActiveRows() {
@@ -2576,6 +2635,24 @@ function getActiveColumns(rows, options = {}) {
   } else {
     columns = columnsFromRows(rows);
   }
+
+  const METADATA_COLUMNS = [
+    "Source",
+    "Import ID",
+    "Document Type",
+    "File Name",
+    "Status",
+    "Source Type",
+    "PDF File Name",
+    "Extraction Review",
+    "Parser Confidence",
+    "Quality Issues",
+    "Template",
+    "Extractor Warnings",
+    "Missing Fields",
+  ];
+  columns = columns.filter((col) => !METADATA_COLUMNS.includes(col));
+
   columns = applyColumnOrder(columns);
   if (options.includeHidden) return columns;
   const hidden = state.hiddenColumns[state.activeView] || [];
