@@ -665,28 +665,48 @@ async function loadState() {
   state.masterOptions = { agencies: [], advertisers: [], ...readJSON(STORAGE_KEYS.masterOptions, {}) };
 
   const draftStr = localStorage.getItem("mpro.draft.state");
+  let latestDbCase = null;
+  if (state.cases && state.cases.length > 0) {
+    const sortedCases = [...state.cases].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    latestDbCase = sortedCases[0];
+  }
+
+  let loadFromDraft = false;
   if (draftStr) {
     try {
       const draft = JSON.parse(draftStr);
-      state.activeCaseId = draft.activeCaseId;
-      state.datasets = draft.datasets || emptyDatasets();
-      state.columnOrders = draft.columnOrders || {};
-      state.columnWidths = draft.columnWidths || {};
-      state.hiddenColumns = draft.hiddenColumns || {};
-      state.sort = draft.sort || { column: null, direction: "asc" };
-      state.activeView = draft.activeView || "agency";
-      if (draft.campaignName && $("#campaign-name")) {
-        $("#campaign-name").value = draft.campaignName;
+      const draftTime = new Date(draft.updatedAt || 0).getTime();
+      const dbTime = latestDbCase ? new Date(latestDbCase.updatedAt || 0).getTime() : 0;
+
+      if (draftTime >= dbTime) {
+        loadFromDraft = true;
+        state.activeCaseId = draft.activeCaseId;
+        state.datasets = draft.datasets || emptyDatasets();
+        state.columnOrders = draft.columnOrders || {};
+        state.columnWidths = draft.columnWidths || {};
+        state.hiddenColumns = draft.hiddenColumns || {};
+        state.sort = draft.sort || { column: null, direction: "asc" };
+        state.activeView = draft.activeView || "agency";
+        if (draft.campaignName && $("#campaign-name")) {
+          $("#campaign-name").value = draft.campaignName;
+        }
+        deriveProgramAndPrRows();
       }
-      deriveProgramAndPrRows();
     } catch (e) {
       console.error("Failed to parse draft state", e);
+    }
+  }
+
+  if (!loadFromDraft) {
+    if (latestDbCase) {
+      state.activeCaseId = latestDbCase.id;
+      localStorage.setItem(STORAGE_KEYS.activeCase, latestDbCase.id);
+      hydrateCase(latestDbCase);
+      if ($("#campaign-name")) $("#campaign-name").value = latestDbCase.name;
+    } else {
       const active = getActiveCase();
       if (active) hydrateCase(active);
     }
-  } else {
-    const active = getActiveCase();
-    if (active) hydrateCase(active);
   }
 
   refreshMasterOptionsFromCases();
@@ -1863,6 +1883,47 @@ function addRow() {
   renderAll();
 }
 
+let saveTimeout = null;
+function debouncedSaveCase() {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async () => {
+    const session = readJSON(STORAGE_KEYS.session, null);
+    if (session && session.token) {
+      await saveCaseSilent();
+    }
+  }, 1200);
+}
+
+async function saveCaseSilent() {
+  const name = $("#campaign-name")?.value.trim() || "Untitled reconciliation";
+  const caseItem = {
+    id: state.activeCaseId || crypto.randomUUID(),
+    name,
+    datasets: state.datasets,
+    columnOrders: state.columnOrders,
+    columnWidths: state.columnWidths,
+    hiddenColumns: state.hiddenColumns,
+    sort: state.sort,
+    activeView: state.activeView,
+    updatedAt: new Date().toISOString(),
+  };
+  const existingIndex = state.cases.findIndex((item) => item.id === caseItem.id);
+  if (existingIndex >= 0) state.cases[existingIndex] = caseItem;
+  else state.cases.unshift(caseItem);
+  state.activeCaseId = caseItem.id;
+  localStorage.setItem(STORAGE_KEYS.activeCase, caseItem.id);
+  localStorage.setItem(STORAGE_KEYS.cases, JSON.stringify(state.cases));
+  const apiSavedCase = await saveCaseToApi(caseItem);
+  if (apiSavedCase) {
+    const savedIndex = state.cases.findIndex((item) => item.id === apiSavedCase.id);
+    if (savedIndex >= 0) state.cases[savedIndex] = apiSavedCase;
+    localStorage.setItem(STORAGE_KEYS.cases, JSON.stringify(state.cases));
+  }
+  state.dirty = false;
+  const saveStatus = $("#save-status");
+  if (saveStatus) saveStatus.textContent = `Saved ${formatDateTime(caseItem.updatedAt)}`;
+}
+
 function saveDraftState() {
   const draft = {
     activeCaseId: state.activeCaseId,
@@ -1873,8 +1934,10 @@ function saveDraftState() {
     hiddenColumns: state.hiddenColumns,
     sort: state.sort,
     activeView: state.activeView,
+    updatedAt: new Date().toISOString(),
   };
   localStorage.setItem("mpro.draft.state", JSON.stringify(draft));
+  debouncedSaveCase();
 }
 
 function clearAllData() {
