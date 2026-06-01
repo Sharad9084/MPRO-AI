@@ -33,6 +33,18 @@ except Exception:
         raise RuntimeError("Remote invoice extractor is not available.")
 
 try:
+    from extractor.mpro_ai_api import extract_with_mpro_ai_api, should_use_mpro_ai_api
+    _MPRO_AI_AVAILABLE = True
+except Exception:
+    _MPRO_AI_AVAILABLE = False
+
+    def should_use_mpro_ai_api(source_type):
+        return False
+
+    def extract_with_mpro_ai_api(*args, **kwargs):
+        raise RuntimeError("Mpro AI extractor is not available.")
+
+try:
     from extractor.engine import extract_pdf, result_to_dict
     _EXTRACTOR_AVAILABLE = True
 except Exception:
@@ -602,6 +614,39 @@ def list_cases():
     return cases
 
 
+def get_extracted_data_by_source(source_type):
+    if source_type not in SOURCE_TABLES:
+        return []
+    table = SOURCE_TABLES[source_type]
+    with connect() as conn:
+        rows = conn.execute(
+            f"SELECT raw_json FROM {table} WHERE case_id = (SELECT id FROM reconciliation_cases ORDER BY updated_at DESC LIMIT 1)"
+        ).fetchall()
+    return [json.loads(row["raw_json"]) for row in rows]
+
+
+def save_extracted_data(datasets, metadata=None):
+    case_id = str(uuid.uuid4())
+    case = {
+        "id": case_id,
+        "name": metadata.get("name") if metadata else "Extracted Data",
+        "datasets": datasets,
+        "activeView": "reconciliation",
+        "columnOrders": {},
+        "columnWidths": {},
+        "sort": {},
+    }
+    return upsert_case(case)
+
+
+def clear_extracted_data():
+    with connect() as conn:
+        conn.execute("DELETE FROM reconciliation_cases WHERE name LIKE 'Extracted Data%'")
+        for table in SOURCE_TABLES.values():
+            conn.execute(f"DELETE FROM {table}")
+        conn.execute("DELETE FROM uploaded_files")
+
+
 class Handler(BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -619,6 +664,10 @@ class Handler(BaseHTTPRequestHandler):
             json_response(self, 200, {"ok": True, "database": str(DB_PATH), "extractor": _EXTRACTOR_AVAILABLE})
         elif path == "/api/extract":
             json_response(self, 200, {"ok": True, "service": "MPro PDF extraction API", "available": _EXTRACTOR_AVAILABLE})
+        elif path.startswith("/api/extracted-data/"):
+            source_type = path.split("/")[-1]
+            data = get_extracted_data_by_source(source_type)
+            json_response(self, 200, {"data": data, "sourceType": source_type})
         elif path == "/api/cases":
             if not require_user(self):
                 json_response(self, 401, {"error": "Unauthorized"})
@@ -648,6 +697,19 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/auth/signout":
             revoke_session(auth_header_token(self))
             json_response(self, 200, {"ok": True})
+        elif path == "/api/extracted-data/save":
+            try:
+                payload = read_body(self)
+                case = save_extracted_data(payload.get("datasets", {}), payload.get("metadata", {}))
+                json_response(self, 200, {"case": case})
+            except Exception as exc:
+                json_response(self, 500, {"error": str(exc)})
+        elif path == "/api/extracted-data/clear":
+            try:
+                clear_extracted_data()
+                json_response(self, 200, {"ok": True})
+            except Exception as exc:
+                json_response(self, 500, {"error": str(exc)})
         elif path == "/api/cases":
             if not require_user(self):
                 json_response(self, 401, {"error": "Unauthorized"})
@@ -708,6 +770,14 @@ class Handler(BaseHTTPRequestHandler):
                     json_response(self, 503, {"error": "Remote invoice extractor is not available."})
                     return
                 result = extract_with_remote_invoice_api(file_item["content"], filename, source_type, metadata)
+                json_response(self, 200, result)
+                return
+
+            if should_use_mpro_ai_api(source_type):
+                if not _MPRO_AI_AVAILABLE:
+                    json_response(self, 503, {"error": "Mpro AI extractor is not available."})
+                    return
+                result = extract_with_mpro_ai_api(file_item["content"], filename, source_type, metadata)
                 json_response(self, 200, result)
                 return
 

@@ -711,6 +711,9 @@ async function loadState() {
 
   refreshMasterOptionsFromCases();
   refreshMasterOptionsFromDatasets();
+
+  // Load extracted data from backend
+  await loadExtractedDataFromBackendToState();
 }
 
 function keepKnownFilters(filters, allowedKeys) {
@@ -1191,6 +1194,10 @@ async function importSourceFiles(sourceKey) {
     state.dirty = true;
     input.value = "";
     renderAll();
+
+    // Save extracted data to backend
+    await saveExtractedDataToBackend(state.datasets);
+
     toast(`${imported.length} PDF row${imported.length === 1 ? "" : "s"} extracted from ${pdfCount || files.length} file${(pdfCount || files.length) === 1 ? "" : "s"} into ${config.label}.`);
   } catch (error) {
     toast(error.message || "Import failed.");
@@ -1940,8 +1947,12 @@ function saveDraftState() {
   debouncedSaveCase();
 }
 
-function clearAllData() {
+async function clearAllData() {
   if (!confirm("Are you sure you want to clear all data? This will empty the current workspace.")) return;
+
+  // Clear backend data
+  await clearExtractedDataFromBackend();
+
   state.datasets = emptyDatasets();
   state.activeCaseId = null;
   localStorage.removeItem("mpro.draft.state");
@@ -3381,6 +3392,64 @@ function readJSON(key, fallback) {
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
+  }
+}
+
+async function saveExtractedDataToBackend(datasets) {
+  try {
+    const response = await fetch(apiUrl("/api/extracted-data/save"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ datasets, metadata: { name: "Extracted PDF Data" } }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to save data:", error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Backend save error:", error);
+    return false;
+  }
+}
+
+async function loadExtractedDataFromBackend(sourceType) {
+  try {
+    const response = await fetch(apiUrl(`/api/extracted-data/${sourceType}`));
+    if (!response.ok) return [];
+    const result = await response.json();
+    return result.data || [];
+  } catch (error) {
+    console.error("Backend load error:", error);
+    return [];
+  }
+}
+
+async function loadExtractedDataFromBackendToState() {
+  const sourceTypes = ["po", "agency", "thirdPartyInvoice", "thirdPartyMonitoring", "mediaSchedule"];
+  for (const sourceType of sourceTypes) {
+    const data = await loadExtractedDataFromBackend(sourceType);
+    if (data.length > 0) {
+      state.datasets[sourceType] = data;
+    }
+  }
+  deriveProgramAndPrRows();
+  renderAll();
+}
+
+async function clearExtractedDataFromBackend() {
+  try {
+    const response = await fetch(apiUrl("/api/extracted-data/clear"), { method: "POST" });
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to clear data:", error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Backend clear error:", error);
+    return false;
   }
 }
 
