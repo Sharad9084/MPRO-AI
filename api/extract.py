@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from extractor.engine import extract_pdf, result_to_dict  # noqa: E402
+from extractor.remote_invoice_api import extract_with_remote_invoice_api, should_use_remote_invoice_api  # noqa: E402
 from extractor.schemas import UploadMetadata  # noqa: E402
 
 
@@ -104,13 +105,19 @@ class handler(BaseHTTPRequestHandler):
                 advertiser_name=form_value(fields, "advertiser_name"),
                 campaign_period=form_value(fields, "campaign_period"),
             )
+            source_type = form_value(fields, "source_type", "auto") or "auto"
+
+            if should_use_remote_invoice_api(source_type):
+                result = extract_with_remote_invoice_api(file_item["content"], filename, source_type, metadata)
+                send_json(self, 200, result)
+                return
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 pdf_path = Path(temp_dir) / filename
                 pdf_path.write_bytes(file_item["content"])
                 result = extract_pdf(
                     pdf_path,
-                    source_type=form_value(fields, "source_type", "auto") or "auto",
+                    source_type=source_type,
                     metadata=metadata,
                     save_debug=False,
                 )

@@ -20,8 +20,20 @@ if str(_SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(_SERVER_ROOT))
 
 try:
-    from extractor.engine import extract_pdf, result_to_dict
+    from extractor.remote_invoice_api import extract_with_remote_invoice_api, should_use_remote_invoice_api
     from extractor.schemas import UploadMetadata
+    _REMOTE_INVOICE_AVAILABLE = True
+except Exception:
+    _REMOTE_INVOICE_AVAILABLE = False
+
+    def should_use_remote_invoice_api(source_type):
+        return False
+
+    def extract_with_remote_invoice_api(*args, **kwargs):
+        raise RuntimeError("Remote invoice extractor is not available.")
+
+try:
+    from extractor.engine import extract_pdf, result_to_dict
     _EXTRACTOR_AVAILABLE = True
 except Exception:
     _EXTRACTOR_AVAILABLE = False
@@ -651,9 +663,6 @@ class Handler(BaseHTTPRequestHandler):
             json_response(self, 404, {"error": "Not found"})
 
     def _handle_extract(self):
-        if not _EXTRACTOR_AVAILABLE:
-            json_response(self, 503, {"error": "Extractor not available. Install pdfplumber and pypdf."})
-            return
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
             json_response(self, 400, {"error": "Upload a PDF using multipart/form-data."})
@@ -692,10 +701,24 @@ class Handler(BaseHTTPRequestHandler):
                 advertiser_name=fields.get("advertiser_name", ""),
                 campaign_period=fields.get("campaign_period", ""),
             )
+            source_type = fields.get("source_type", "auto") or "auto"
+
+            if should_use_remote_invoice_api(source_type):
+                if not _REMOTE_INVOICE_AVAILABLE:
+                    json_response(self, 503, {"error": "Remote invoice extractor is not available."})
+                    return
+                result = extract_with_remote_invoice_api(file_item["content"], filename, source_type, metadata)
+                json_response(self, 200, result)
+                return
+
+            if not _EXTRACTOR_AVAILABLE:
+                json_response(self, 503, {"error": "Extractor not available. Install pdfplumber and pypdf."})
+                return
+
             with tempfile.TemporaryDirectory() as tmp:
                 pdf_path = Path(tmp) / filename
                 pdf_path.write_bytes(file_item["content"])
-                result = extract_pdf(pdf_path, source_type=fields.get("source_type", "auto") or "auto", metadata=metadata, save_debug=False)
+                result = extract_pdf(pdf_path, source_type=source_type, metadata=metadata, save_debug=False)
             json_response(self, 200, result_to_dict(result))
         except Exception as exc:
             json_response(self, 500, {"error": str(exc)})
