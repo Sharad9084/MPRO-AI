@@ -70,7 +70,7 @@ SOURCE_TABLES = {
 
 
 FIELD_ALIASES = {
-    "advertiser_name": ["Advertiser Name", "Advertiser"],
+    "advertiser_name": ["Advertiser Name", "Advertiser", "Advertiser_Name"],
     "campaign_id": ["Campaign ID", "Program ID"],
     "budget": ["Budget", "Campaign Budget", "Program Budget"],
     "program_manager": ["Program Manager", "Campaign Manager"],
@@ -80,39 +80,39 @@ FIELD_ALIASES = {
     "vendor_name": ["Vendor Name", "Agency Name", "Third Party Vendor Name"],
     "brand_name": ["Brand Name", "Brand"],
     "pr_amount": ["PR Amount", "Purchase Requisition Amount", "Estimate Amount"],
-    "po_number": ["PO Number", "PO No", "PO"],
+    "po_number": ["PO Number", "PO No", "PO", "PO_Number"],
     "po_date": ["PO Date"],
-    "agency_name": ["Agency Name", "Agency", "Vendor"],
+    "agency_name": ["Agency Name", "Agency", "Vendor", "Agency_Name"],
     "brand": ["Brand", "Brand Name", "Project"],
     "campaign_name": ["Campaign Name", "Campaign", "Description"],
     "po_amount_incl_tax": ["PO Amount Incl Tax", "PO Amount", "PO Amount incl Tax"],
-    "invoice_number": ["Invoice Number", "Invoice No"],
-    "invoice_date": ["Invoice Date"],
-    "campaign_period": ["Campaign Period", "Activity Month", "Billing Period"],
+    "invoice_number": ["Invoice Number", "Invoice No", "Invoice_Number"],
+    "invoice_date": ["Invoice Date", "Invoice_Date"],
+    "campaign_period": ["Campaign Period", "Activity Month", "Billing Period", "Billing_Period"],
     "estimate_number": ["Estimate Number", "Estimate No"],
     "estimate_period": ["Estimate Period"],
     "total_value_including_taxes": ["Total Value Including Taxes", "Total Value", "Invoice Value"],
-    "channel_name": ["Channel Name", "Channel", "Station Relation", "STN"],
+    "channel_name": ["Channel Name", "Channel", "Station Relation", "STN", "Channel_Name"],
     "program": ["Program"],
     "time_band": ["Time Band", "Time Range/Sales Unit"],
-    "broadcaster_name": ["Broadcaster Name", "Broadcaster", "Producer"],
-    "activity_date": ["Date", "Activity Date", "Telecast Date"],
+    "broadcaster_name": ["Broadcaster Name", "Broadcaster", "Producer", "Broadcaster_Name"],
+    "activity_date": ["Date", "Activity Date", "Telecast Date", "Activity_Date", "Telecast_Date", "Program Date", "Program_Date"],
     "date_wise_spots": ["Date Wise Spots", "Spots"],
-    "spot_duration": ["Spot Duration", "Duration Sec", "LEN (Duration Sec)"],
+    "spot_duration": ["Spot Duration", "Duration Sec", "LEN (Duration Sec)", "Duration"],
     "spot_rate_per_10_sec": ["Spot Rate Per 10 Sec", "Spot Rate"],
     "net_cost": ["Net Cost"],
-    "billing_period": ["Billing Period"],
+    "billing_period": ["Billing Period", "Billing_Period"],
     "media_type": ["Media Type", "Medium"],
-    "third_party_vendor_name": ["Third Party Vendor Name", "Broadcaster Name", "Publisher Name", "Vendor Name", "Producer"],
+    "third_party_vendor_name": ["Third Party Vendor Name", "Broadcaster Name", "Publisher Name", "Vendor Name", "Producer", "Broadcaster_Name", "Publisher_Name", "Vendor_Name"],
     "tp": ["TP", "Telecast Program"],
-    "day_name": ["Day", "Dy"],
-    "air_time": ["Air Time", "Telecast Time"],
-    "duration_sec": ["Duration Sec", "LEN (Duration Sec)", "Spot Duration"],
-    "spot_copy_caption": ["Spot Copy Caption", "Spot Copy (Caption)", "Caption"],
-    "rate_inr": ["Rate INR", "Rate (INR)", "Rate"],
+    "day_name": ["Day", "Dy", "Day_Name"],
+    "air_time": ["Air Time", "Telecast Time", "Air_Time", "Telecast_Time", "Advertise Start Time", "Start Time"],
+    "duration_sec": ["Duration Sec", "LEN (Duration Sec)", "Spot Duration", "Duration", "Duration_Sec"],
+    "spot_copy_caption": ["Spot Copy Caption", "Spot Copy (Caption)", "Caption", "Spot_Copy", "Spot_Copy_Caption"],
+    "rate_inr": ["Rate INR", "Rate (INR)", "Rate", "rate", "Rate_INR"],
     "spots": ["Spots", "Date Wise Spots", "Spot Count"],
     "planned_amount": ["Planned Amount", "Schedule Amount", "Media Schedule Amount"],
-    "calculated_amount_inr": ["Calculated Amount INR", "Calculate final amount (INR)"],
+    "calculated_amount_inr": ["Calculated Amount INR", "Calculate final amount (INR)", "Amount", "amount", "Calculated_Amount_INR"],
     "monitoring_status": ["Monitoring Status", "Status"],
 }
 
@@ -601,6 +601,75 @@ def upsert_case(payload):
     return case
 
 
+def init_case(payload):
+    case = payload.get("case", payload)
+    case_id = case.get("id") or str(uuid.uuid4())
+    updated_at = now_iso()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO reconciliation_cases(
+              id, name, active_view, column_orders_json, column_widths_json, sort_json, raw_json, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              active_view = excluded.active_view,
+              column_orders_json = excluded.column_orders_json,
+              column_widths_json = excluded.column_widths_json,
+              sort_json = excluded.sort_json,
+              raw_json = excluded.raw_json,
+              updated_at = excluded.updated_at
+            """,
+            (
+                case_id,
+                case.get("name") or "Untitled reconciliation",
+                case.get("activeView") or "reconciliation",
+                json.dumps(case.get("columnOrders") or {}, ensure_ascii=False),
+                json.dumps(case.get("columnWidths") or {}, ensure_ascii=False),
+                json.dumps(case.get("sort") or {}, ensure_ascii=False),
+                json.dumps(case, ensure_ascii=False),
+                updated_at,
+            ),
+        )
+        for table in SOURCE_TABLES.values():
+            conn.execute(f"DELETE FROM {table} WHERE case_id = ?", (case_id,))
+        conn.execute("DELETE FROM uploaded_files WHERE case_id = ?", (case_id,))
+    return {"id": case_id, "updatedAt": updated_at}
+
+
+def insert_case_chunk(case_id, source, rows):
+    if source not in SOURCE_TABLES:
+        raise ValueError(f"Invalid source type: {source}")
+    with connect() as conn:
+        insert_source_rows(conn, case_id, source, rows or [])
+        insert_uploaded_files(conn, case_id, {source: rows})
+
+
+def finalize_case(case_id):
+    with connect() as conn:
+        row = conn.execute("SELECT raw_json FROM reconciliation_cases WHERE id = ?", (case_id,)).fetchone()
+        if not row:
+            raise ValueError("Case not found")
+        case_data = json.loads(row["raw_json"])
+        
+        # Reconstruct datasets
+        datasets = {}
+        for source, table in SOURCE_TABLES.items():
+            r_rows = conn.execute(f"SELECT raw_json FROM {table} WHERE case_id = ?", (case_id,)).fetchall()
+            datasets[source] = [json.loads(r["raw_json"]) for r in r_rows]
+            
+        case_data["datasets"] = datasets
+        updated_at = now_iso()
+        case_data["updatedAt"] = updated_at
+        
+        conn.execute(
+            "UPDATE reconciliation_cases SET raw_json = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(case_data, ensure_ascii=False), updated_at, case_id)
+        )
+    return {"id": case_id, "status": "finalized", "updatedAt": updated_at}
+
+
 def list_cases():
     with connect() as conn:
         rows = conn.execute(
@@ -717,6 +786,45 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 case = upsert_case(read_body(self))
                 json_response(self, 200, {"case": case})
+            except Exception as exc:
+                json_response(self, 500, {"error": str(exc)})
+        elif path == "/api/cases/init":
+            if not require_user(self):
+                json_response(self, 401, {"error": "Unauthorized"})
+                return
+            try:
+                result = init_case(read_body(self))
+                json_response(self, 200, result)
+            except Exception as exc:
+                json_response(self, 500, {"error": str(exc)})
+        elif path == "/api/cases/chunk":
+            if not require_user(self):
+                json_response(self, 401, {"error": "Unauthorized"})
+                return
+            try:
+                payload = read_body(self)
+                case_id = payload.get("case_id")
+                source = payload.get("source")
+                rows = payload.get("rows")
+                if not case_id or not source or not rows:
+                    json_response(self, 400, {"error": "case_id, source, and rows are required"})
+                    return
+                insert_case_chunk(case_id, source, rows)
+                json_response(self, 200, {"ok": True})
+            except Exception as exc:
+                json_response(self, 500, {"error": str(exc)})
+        elif path == "/api/cases/finalize":
+            if not require_user(self):
+                json_response(self, 401, {"error": "Unauthorized"})
+                return
+            try:
+                payload = read_body(self)
+                case_id = payload.get("case_id")
+                if not case_id:
+                    json_response(self, 400, {"error": "case_id is required"})
+                    return
+                result = finalize_case(case_id)
+                json_response(self, 200, result)
             except Exception as exc:
                 json_response(self, 500, {"error": str(exc)})
         elif path == "/api/extract":

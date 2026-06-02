@@ -56,7 +56,7 @@ SOURCE_TABLES = {
 
 
 FIELD_ALIASES = {
-    "advertiser_name": ["Advertiser Name", "Advertiser"],
+    "advertiser_name": ["Advertiser Name", "Advertiser", "Advertiser_Name"],
     "campaign_id": ["Campaign ID", "Program ID"],
     "campaign_type": ["Campaign Type", "Campaigns Type", "Campaings Type", "Campaign Category", "Activity Type", "Media Type", "Medium"],
     "campaign_manager": ["Campaign Manager", "Campaigns Manager", "Campaings Manager", "Program Manager", "Manager"],
@@ -69,41 +69,41 @@ FIELD_ALIASES = {
     "vendor_name": ["Vendor Name", "Agency Name", "Third Party Vendor Name"],
     "brand_name": ["Brand Name", "Brand"],
     "pr_amount": ["PR Amount", "Purchase Requisition Amount", "Estimate Amount"],
-    "po_number": ["PO Number", "PO No", "PO"],
+    "po_number": ["PO Number", "PO No", "PO", "PO_Number"],
     "po_date": ["PO Date"],
-    "agency_name": ["Agency Name", "Agency", "Vendor"],
+    "agency_name": ["Agency Name", "Agency", "Vendor", "Agency_Name"],
     "brand": ["Brand", "Brand Name", "Project"],
     "campaign_name": ["Campaign Name", "Campaign", "Description"],
     "po_amount_incl_tax": ["PO Amount Incl Tax", "PO Amount", "PO Amount incl Tax"],
-    "invoice_number": ["Invoice Number", "Invoice No"],
-    "invoice_date": ["Invoice Date"],
-    "campaign_period": ["Campaign Period", "Activity Month", "Billing Period"],
+    "invoice_number": ["Invoice Number", "Invoice No", "Invoice_Number"],
+    "invoice_date": ["Invoice Date", "Invoice_Date"],
+    "campaign_period": ["Campaign Period", "Activity Month", "Billing Period", "Billing_Period"],
     "estimate_number": ["Estimate Number", "Estimate No"],
     "estimate_period": ["Estimate Period"],
     "total_value_including_taxes": ["Total Value Including Taxes", "Total Value", "Invoice Value"],
-    "channel_name": ["Channel Name", "Channel", "Station Relation", "STN"],
+    "channel_name": ["Channel Name", "Channel", "Station Relation", "STN", "Channel_Name"],
     "program": ["Program"],
     "time_band": ["Time Band", "Time Range/Sales Unit"],
-    "broadcaster_name": ["Broadcaster Name", "Broadcaster", "Producer"],
-    "activity_date": ["Date", "Activity Date", "Telecast Date"],
+    "broadcaster_name": ["Broadcaster Name", "Broadcaster", "Producer", "Broadcaster_Name"],
+    "activity_date": ["Date", "Activity Date", "Telecast Date", "Activity_Date", "Telecast_Date", "Program Date", "Program_Date"],
     "date_wise_spots": ["Date Wise Spots", "Spots"],
-    "spot_duration": ["Spot Duration", "Duration Sec", "LEN (Duration Sec)"],
+    "spot_duration": ["Spot Duration", "Duration Sec", "LEN (Duration Sec)", "Duration"],
     "spot_rate_per_10_sec": ["Spot Rate Per 10 Sec", "Spot Rate"],
     "net_cost": ["Net Cost"],
-    "billing_period": ["Billing Period"],
+    "billing_period": ["Billing Period", "Billing_Period"],
     "media_type": ["Media Type", "Medium"],
-    "third_party_vendor_name": ["Third Party Vendor Name", "Broadcaster Name", "Publisher Name", "Vendor Name", "Producer"],
+    "third_party_vendor_name": ["Third Party Vendor Name", "Broadcaster Name", "Publisher Name", "Vendor Name", "Producer", "Broadcaster_Name", "Publisher_Name", "Vendor_Name"],
     "tp": ["TP", "Telecast Program"],
-    "day_name": ["Day", "Dy"],
-    "air_time": ["Air Time", "Telecast Time"],
-    "duration_sec": ["Duration Sec", "LEN (Duration Sec)", "Spot Duration"],
-    "spot_copy_caption": ["Spot Copy Caption", "Spot Copy (Caption)", "Caption"],
+    "day_name": ["Day", "Dy", "Day_Name"],
+    "air_time": ["Air Time", "Telecast Time", "Air_Time", "Telecast_Time", "Advertise Start Time", "Start Time"],
+    "duration_sec": ["Duration Sec", "LEN (Duration Sec)", "Spot Duration", "Duration", "Duration_Sec"],
+    "spot_copy_caption": ["Spot Copy Caption", "Spot Copy (Caption)", "Caption", "Spot_Copy", "Spot_Copy_Caption"],
     "proof_of_performance": ["Proof of Performance", "POP", "Proof", "Monitoring Proof", "Tear Sheet", "DCM Proof", "BARC Proof", "AdEx Proof"],
     "expense_monitoring": ["Expense Monitoring", "Expense Monitorning", "Expense Monitor", "Spend Monitoring", "Cost Monitoring"],
-    "rate_inr": ["Rate INR", "Rate (INR)", "Rate"],
+    "rate_inr": ["Rate INR", "Rate (INR)", "Rate", "rate", "Rate_INR"],
     "spots": ["Spots", "Date Wise Spots", "Spot Count"],
     "planned_amount": ["Planned Amount", "Schedule Amount", "Media Schedule Amount"],
-    "calculated_amount_inr": ["Calculated Amount INR", "Calculate final amount (INR)"],
+    "calculated_amount_inr": ["Calculated Amount INR", "Calculate final amount (INR)", "Amount", "amount", "Calculated_Amount_INR"],
     "monitoring_status": ["Monitoring Status", "Status"],
 }
 
@@ -657,6 +657,93 @@ def upsert_case(payload, user=None):
     case["id"] = case_id
     case["updatedAt"] = updated_at
     return case
+
+
+def init_case(payload, user=None):
+    case = payload.get("case", payload)
+    case_id = case.get("id") or str(uuid.uuid4())
+    updated_at = now_iso()
+    user_id = user["id"] if user else None
+    with connect() as conn:
+        existing_owner = conn.execute("SELECT user_id FROM reconciliation_cases WHERE id = %s", (case_id,)).fetchone()
+        if existing_owner and existing_owner["user_id"] and existing_owner["user_id"] != user_id:
+            raise ValueError("This reconciliation belongs to another account.")
+        conn.execute(
+            """
+            INSERT INTO reconciliation_cases(
+              id, user_id, name, active_view, column_orders_json, column_widths_json, sort_json, raw_json, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT(id) DO UPDATE SET
+              user_id = COALESCE(reconciliation_cases.user_id, EXCLUDED.user_id),
+              name = EXCLUDED.name,
+              active_view = EXCLUDED.active_view,
+              column_orders_json = EXCLUDED.column_orders_json,
+              column_widths_json = EXCLUDED.column_widths_json,
+              sort_json = EXCLUDED.sort_json,
+              raw_json = EXCLUDED.raw_json,
+              updated_at = EXCLUDED.updated_at
+            """,
+            (
+                case_id,
+                user_id,
+                case.get("name") or "Untitled reconciliation",
+                case.get("activeView") or "reconciliation",
+                Jsonb(case.get("columnOrders") or {}),
+                Jsonb(case.get("columnWidths") or {}),
+                Jsonb(case.get("sort") or {}),
+                Jsonb(case),
+                updated_at,
+            ),
+        )
+        for table in SOURCE_TABLES.values():
+            conn.execute(f"DELETE FROM {table} WHERE case_id = %s", (case_id,))
+        conn.execute("DELETE FROM uploaded_files WHERE case_id = %s", (case_id,))
+    return {"id": case_id, "updatedAt": updated_at}
+
+
+def insert_case_chunk(case_id, source, rows, user=None):
+    if source not in SOURCE_TABLES:
+        raise ValueError(f"Invalid source type: {source}")
+    user_id = user["id"] if user else None
+    with connect() as conn:
+        existing_owner = conn.execute("SELECT user_id FROM reconciliation_cases WHERE id = %s", (case_id,)).fetchone()
+        if existing_owner and existing_owner["user_id"] and existing_owner["user_id"] != user_id:
+            raise ValueError("This reconciliation belongs to another account.")
+        insert_source_rows(conn, case_id, source, rows or [])
+        insert_uploaded_files(conn, case_id, {source: rows})
+
+
+def finalize_case(case_id, user=None):
+    user_id = user["id"] if user else None
+    with connect() as conn:
+        existing_owner = conn.execute("SELECT user_id FROM reconciliation_cases WHERE id = %s", (case_id,)).fetchone()
+        if existing_owner and existing_owner["user_id"] and existing_owner["user_id"] != user_id:
+            raise ValueError("This reconciliation belongs to another account.")
+            
+        case_row = conn.execute(
+            "SELECT name, active_view, column_orders_json, column_widths_json, sort_json, raw_json FROM reconciliation_cases WHERE id = %s",
+            (case_id,)
+        ).fetchone()
+        if not case_row:
+            raise ValueError("Case not found")
+            
+        # Reconstruct datasets
+        datasets = {}
+        for source, table in SOURCE_TABLES.items():
+            r_rows = conn.execute(f"SELECT raw_json FROM {table} WHERE case_id = %s", (case_id,)).fetchall()
+            datasets[source] = [r["raw_json"] for r in r_rows]
+            
+        case_data = case_row["raw_json"]
+        case_data["datasets"] = datasets
+        updated_at = now_iso()
+        case_data["updatedAt"] = updated_at
+        
+        conn.execute(
+            "UPDATE reconciliation_cases SET raw_json = %s, updated_at = %s WHERE id = %s",
+            (Jsonb(case_data), updated_at, case_id)
+        )
+    return {"id": case_id, "status": "finalized", "updatedAt": updated_at}
 
 
 def list_cases():

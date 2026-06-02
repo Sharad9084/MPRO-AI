@@ -2044,12 +2044,121 @@ function parseDelimitedRows(text, delimiter) {
 
 function normalizeRows(rows, sourceKey, fileName = "") {
   const config = SOURCE_CONFIG[sourceKey];
+  if (!config) return { columns: columnsFromRows(rows), rows };
+  
+  const mappings = {
+    thirdPartyInvoice: {
+      "Broadcaster_Name": "Third Party Vendor Name",
+      "Broadcaster Name": "Third Party Vendor Name",
+      "Channel_Name": "Channel Name",
+      "Channel": "Channel Name",
+      "Billing_Period": "Billing Period",
+      "PO_Number": "PO Number",
+      "RO_Number": "RO Number",
+      "Invoice_Number": "Invoice Number",
+      "Invoice Date": "Invoice Date",
+      "Invoice_Date": "Invoice Date",
+      "Air_Time": "Air Time",
+      "Duration": "Duration Sec",
+      "Duration Sec": "Duration Sec",
+      "Spot_Copy": "Spot Copy Caption",
+      "Rate": "Rate INR",
+      "Rate_INR": "Rate INR",
+      "Amount": "Calculated Amount INR",
+      "Calculated_Amount_INR": "Calculated Amount INR",
+    },
+    thirdPartyMonitoring: {
+      "Broadcaster_Name": "Third Party Vendor Name",
+      "Broadcaster Name": "Third Party Vendor Name",
+      "Channel_Name": "Channel Name",
+      "Channel": "Channel Name",
+      "Program Date": "Date",
+      "Program_Date": "Date",
+      "Time": "Air Time",
+      "Advertise Start Time": "Air Time",
+      "Start Time": "Air Time",
+      "Duration": "Duration Sec",
+      "Duration Sec": "Duration Sec",
+      "Caption": "Spot Copy Caption",
+      "Spot_Copy": "Spot Copy Caption",
+      "Spot_Copy_Caption": "Spot Copy Caption",
+      "Status": "Monitoring Status",
+    }
+  }[sourceKey] || {};
+
   const sourceColumns = config.columns;
   const cleanedRows = rows.map((row) => {
     const clean = {};
     Object.entries(row).forEach(([key, value]) => {
-      clean[cleanHeader(key)] = value == null ? "" : String(value).trim();
+      let cleanedKey = cleanHeader(key);
+      if (mappings[cleanedKey]) {
+        cleanedKey = mappings[cleanedKey];
+      }
+      clean[cleanedKey] = value == null ? "" : String(value).trim();
     });
+
+    // Ensure all target columns are populated if alternate formats exist in original keys
+    if (sourceKey === "thirdPartyInvoice") {
+      if (!clean["Third Party Vendor Name"] && (row.Broadcaster_Name || row["Broadcaster Name"])) {
+        clean["Third Party Vendor Name"] = String(row.Broadcaster_Name || row["Broadcaster Name"] || "").trim();
+      }
+      if (!clean["Channel Name"] && (row.Channel_Name || row.Channel)) {
+        clean["Channel Name"] = String(row.Channel_Name || row.Channel || "").trim();
+      }
+      if (!clean["Billing Period"] && row.Billing_Period) {
+        clean["Billing Period"] = String(row.Billing_Period || "").trim();
+      }
+      if (!clean["PO Number"] && row.PO_Number) {
+        clean["PO Number"] = String(row.PO_Number || "").trim();
+      }
+      if (!clean["RO Number"] && row.RO_Number) {
+        clean["RO Number"] = String(row.RO_Number || "").trim();
+      }
+      if (!clean["Invoice Number"] && row.Invoice_Number) {
+        clean["Invoice Number"] = String(row.Invoice_Number || "").trim();
+      }
+      if (!clean["Invoice Date"] && row.Invoice_Date) {
+        clean["Invoice Date"] = String(row.Invoice_Date || "").trim();
+      }
+      if (!clean["Air Time"] && row.Air_Time) {
+        clean["Air Time"] = String(row.Air_Time || "").trim();
+      }
+      if (!clean["Duration Sec"] && (row.Duration || row.Duration_Sec)) {
+        clean["Duration Sec"] = String(row.Duration || row.Duration_Sec || "").trim();
+      }
+      if (!clean["Spot Copy Caption"] && row.Spot_Copy) {
+        clean["Spot Copy Caption"] = String(row.Spot_Copy || "").trim();
+      }
+      if (!clean["Rate INR"] && (row.Rate || row.Rate_INR)) {
+        clean["Rate INR"] = String(row.Rate || row.Rate_INR || "").trim();
+      }
+      if (!clean["Calculated Amount INR"] && (row.Amount || row.Calculated_Amount_INR)) {
+        clean["Calculated Amount INR"] = String(row.Amount || row.Calculated_Amount_INR || "").trim();
+      }
+    } else if (sourceKey === "thirdPartyMonitoring") {
+      if (!clean["Third Party Vendor Name"] && (row.Broadcaster_Name || row["Broadcaster Name"])) {
+        clean["Third Party Vendor Name"] = String(row.Broadcaster_Name || row["Broadcaster Name"] || "").trim();
+      }
+      if (!clean["Channel Name"] && (row.Channel_Name || row.Channel)) {
+        clean["Channel Name"] = String(row.Channel_Name || row.Channel || "").trim();
+      }
+      if (!clean["Date"] && (row["Program Date"] || row.Program_Date)) {
+        clean["Date"] = String(row["Program Date"] || row.Program_Date || "").trim();
+      }
+      if (!clean["Air Time"] && (row.Time || row["Advertise Start Time"] || row["Start Time"])) {
+        clean["Air Time"] = String(row.Time || row["Advertise Start Time"] || row["Start Time"] || "").trim();
+      }
+      if (!clean["Duration Sec"] && (row.Duration || row.Duration_Sec)) {
+        clean["Duration Sec"] = String(row.Duration || row.Duration_Sec || "").trim();
+      }
+      if (!clean["Spot Copy Caption"] && (row.Caption || row.Spot_Copy)) {
+        clean["Spot Copy Caption"] = String(row.Caption || row.Spot_Copy || "").trim();
+      }
+      if (!clean["Monitoring Status"] && row.Status) {
+        clean["Monitoring Status"] = String(row.Status || "").trim();
+      }
+    }
+    
     clean.Source = config.label;
     clean["File Name"] = clean["File Name"] || fileName;
     clean.Status = clean.Status || "Imported";
