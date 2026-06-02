@@ -646,9 +646,23 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await loadState();
-  bindEvents();
-  restoreSession();
+  try {
+    bindEvents();
+  } catch (e) {
+    console.error("Error binding events:", e);
+  }
+  
+  try {
+    await loadState();
+  } catch (e) {
+    console.error("Error loading state:", e);
+  }
+  
+  try {
+    restoreSession();
+  } catch (e) {
+    console.error("Error restoring session:", e);
+  }
 });
 
 function emptyDatasets() {
@@ -712,8 +726,12 @@ async function loadState() {
   refreshMasterOptionsFromCases();
   refreshMasterOptionsFromDatasets();
 
-  // Load extracted data from backend
-  await loadExtractedDataFromBackendToState();
+  // Load extracted data from backend (wrapped to prevent startup crash on large datasets)
+  try {
+    await loadExtractedDataFromBackendToState();
+  } catch (e) {
+    console.warn("Could not load latest extracted data from backend:", e);
+  }
 }
 
 function keepKnownFilters(filters, allowedKeys) {
@@ -742,6 +760,75 @@ function bindEvents() {
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => switchModule(button.dataset.module)));
   $$(".source-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
   $("#unified-import").addEventListener("click", importUnifiedSourceFiles);
+
+  // Drag & drop file zone events
+  const dragDropZone = $("#drag-drop-zone");
+  const fileInput = $("#source-file-input");
+  const filePreview = $("#file-list-preview");
+
+  if (dragDropZone && fileInput) {
+    // Click on drop zone triggers file input
+    dragDropZone.addEventListener("click", () => fileInput.click());
+
+    // Allow keyboard trigger via space/enter
+    dragDropZone.addEventListener("keydown", (e) => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    // Drag states
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dragDropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragDropZone.classList.add("dragover");
+      }, false);
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      dragDropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragDropZone.classList.remove("dragover");
+      }, false);
+    });
+
+    // Handle dropped files
+    dragDropZone.addEventListener("drop", (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files && files.length) {
+        fileInput.files = files;
+        updateFilePreview(files);
+      }
+    });
+
+    // Handle selected files via browse dialog
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files && fileInput.files.length) {
+        updateFilePreview(fileInput.files);
+      } else {
+        if (filePreview) {
+          filePreview.classList.add("hidden");
+          filePreview.textContent = "";
+        }
+      }
+    });
+  }
+
+  function updateFilePreview(files) {
+    if (!filePreview) return;
+    const fileCount = files.length;
+    filePreview.classList.remove("hidden");
+    if (fileCount === 1) {
+      filePreview.textContent = `Selected: ${files[0].name}`;
+    } else {
+      filePreview.textContent = `Selected: ${fileCount} PDF files`;
+    }
+  }
+
   $$(".help-dot").forEach((button) => button.addEventListener("click", () => button.focus()));
   $("#reset-global-filters").addEventListener("click", resetGlobalFilters);
   $("#collapse-filters").addEventListener("click", () => setFiltersCollapsed(true));
@@ -1206,14 +1293,13 @@ async function importSourceFiles(sourceKey) {
 
 function readUploadMetadata() {
   const startDate = $("#campaign-start-date").value;
-  const endDate = $("#campaign-end-date").value;
   return {
     agency: $("#upload-agency").value.trim(),
     advertiser: $("#upload-advertiser").value.trim(),
     medium: $("#upload-medium").value.trim(),
     campaignStartDate: startDate,
-    campaignEndDate: endDate,
-    campaignPeriod: startDate && endDate ? `${startDate} to ${endDate}` : "",
+    campaignEndDate: "",
+    campaignPeriod: startDate ? `Start: ${startDate}` : "",
   };
 }
 
@@ -1224,9 +1310,6 @@ function validateUploadMetadata(sourceKey, files, metadata) {
   if (!metadata.agency) return "Agency name is required.";
   if (!metadata.medium) return "Medium is required.";
   if (!metadata.advertiser) return "Advertiser name is required.";
-  if (metadata.campaignEndDate && metadata.campaignStartDate && metadata.campaignEndDate < metadata.campaignStartDate) {
-    return "Campaign end date must be after the start date.";
-  }
   return "";
 }
 
@@ -1242,7 +1325,7 @@ function applyUploadMetadata(rows, sourceKey, metadata) {
     next.Medium = next.Medium || metadata.medium;
     next["Media Type"] = next["Media Type"] || metadata.medium;
     next["Campaign Start Date"] = next["Campaign Start Date"] || metadata.campaignStartDate;
-    next["Campaign End Date"] = next["Campaign End Date"] || metadata.campaignEndDate;
+    next["Campaign End Date"] = next["Campaign End Date"] || "";
     next["Campaign Period"] = next["Campaign Period"] || metadata.campaignPeriod;
     return next;
   });
@@ -1254,10 +1337,14 @@ function compactTimestamp() {
 
 function resetUnifiedUploadForm(options = {}) {
   $("#source-file-input").value = "";
+  const filePreview = $("#file-list-preview");
+  if (filePreview) {
+    filePreview.classList.add("hidden");
+    filePreview.textContent = "";
+  }
   $("#source-type-select").value = "";
   $("#upload-medium").value = "";
   $("#campaign-start-date").value = "";
-  $("#campaign-end-date").value = "";
   if (!options.keepMasters) {
     $("#upload-agency").value = "";
     $("#upload-advertiser").value = "";
@@ -1356,6 +1443,24 @@ async function extractPdfFiles(files, sourceHint = "", metadata = {}) {
 
 async function extractPdfFileViaApi(file, sourceKey, metadata = {}) {
   if (!EXTRACTOR_SOURCE_TYPES[sourceKey]) return { ok: false };
+
+  const defaultApiBase = "https://pdf-to-excel-5ota.onrender.com";
+  const currentApiBase = localStorage.getItem("mpro.apiBase") || defaultApiBase || (IS_LOCAL_APP ? LOCAL_API_BASE : "");
+  
+  const urls = [];
+  if (currentApiBase) {
+    const cleanBase = currentApiBase.replace(/\/+$/, "");
+    if (cleanBase.endsWith("/api")) {
+      urls.push(`${cleanBase}/extract`);
+    } else {
+      urls.push(`${cleanBase}/api/extract`);
+      urls.push(`${cleanBase}/extract`);
+    }
+  } else {
+    urls.push("/api/extract");
+    urls.push("/extract");
+  }
+
   const body = new FormData();
   body.append("file", file, file.name);
   body.append("source_type", EXTRACTOR_SOURCE_TYPES[sourceKey]);
@@ -1364,19 +1469,122 @@ async function extractPdfFileViaApi(file, sourceKey, metadata = {}) {
   body.append("advertiser_name", metadata.advertiser || "");
   body.append("campaign_period", metadata.campaignPeriod || "");
 
-  for (const url of extractorApiUrls()) {
+  for (const url of urls) {
     try {
       const response = await fetchWithTimeout(url, { method: "POST", body }, 60000);
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) continue;
-      const resolvedSourceKey = APP_SOURCE_TYPES[payload.sourceType] || sourceKey;
+
+      let resolvedSourceKey = sourceKey;
+      let rawRows = [];
+      let warnings = payload.warnings || [];
+      let missingFields = payload.missingFields || [];
+      let template = payload.template || "";
+      let confidence = payload.confidence || "";
+
+      if (payload.status === "success" && payload.document_type) {
+        const docType = payload.document_type;
+        const header = payload.header || {};
+
+        if (docType === "po") {
+          resolvedSourceKey = "po";
+          const rowData = payload.data || {};
+          rawRows = [{
+            "File Name": file.name,
+            "Advertiser Name": rowData.Advertiser_Name || "",
+            "PO Number": rowData.PO_Number || "",
+            "PO Date": rowData.PO_Date || "",
+            "Agency Name": rowData.Agency_Name || "",
+            "Brand Name": rowData.Brand || "",
+            "PO Description": rowData.Description || "",
+            "PO Amount Incl Tax": rowData.PO_Amount_Incl_Tax || "",
+            "PO Amount Excl Tax": rowData.PO_Amount_Excl_Tax || "",
+            "CGST Amount": rowData.CGST || "",
+            "SGST Amount": rowData.SGST || "",
+          }];
+        } else if (docType === "agency_invoice") {
+          resolvedSourceKey = "agency";
+          rawRows = (payload.spots || []).map(spot => ({
+            "File Name": file.name,
+            "Agency Name": header.Agency_Name || "",
+            "Advertiser Name": header.Advertiser_Name || "",
+            "Invoice Number": header.Invoice_Number || "",
+            "Invoice Date": header.Invoice_Date || "",
+            "Campaign Period": header.Activity_Month || header.Estimate_Period || "",
+            "Estimate Number": header.Estimate_Number || "",
+            "Estimate Period": header.Estimate_Period || "",
+            "PO Number": header.PO_Number || "",
+            "Brand": header.Brand_Name || "",
+            "Campaign Name": header.Campaign_Name || "",
+            "Total Value Including Taxes": header.Total_Value_Incl_Taxes || "",
+            "Channel Name": spot.Channel || "",
+            "Program": spot.Program || "",
+            "Broadcaster Name": spot.Broadcaster_Producer || "",
+            "Day": spot.Day || "",
+            "Time Band": spot.Time_Band || "",
+            "Date": spot.Date || "",
+            "Spot Duration": spot.Spot_Duration || "",
+            "Spot Rate Per 10 Sec": spot.Spot_Rate_Per_10s || "",
+            "Date Wise Spots": spot.No_of_Spots || "",
+            "Net Cost": spot.Net_Cost || "",
+          }));
+        } else if (docType === "broadcaster_invoice") {
+          resolvedSourceKey = "thirdPartyInvoice";
+          rawRows = (payload.spots || []).map(spot => ({
+            "File Name": file.name,
+            "Third Party Vendor Name": header.Broadcaster_Name || spot.Broadcaster_Name || "",
+            "Advertiser Name": header.Advertiser_Name || spot.Advertiser_Name || "",
+            "Agency Name": header.Agency_Name || spot.Agency_Name || "",
+            "Channel Name": header.Channel_Name || spot.Channel_Name || "",
+            "Billing Period": header.Billing_Period || spot.Billing_Period || "",
+            "PO Number": header.PO_Number || spot.PO_Number || "",
+            "RO Number": header.RO_Number || spot.RO_Number || "",
+            "Invoice Number": header.Invoice_Number || spot.Invoice_Number || "",
+            "Invoice Date": header.Invoice_Date || spot.Invoice_Date || "",
+            "Brand": header.Brand || spot.Brand || "",
+            "TP": spot.TP || "",
+            "Program": spot.Program || "",
+            "Date": spot.Date || "",
+            "Day": spot.Day || "",
+            "Air Time": spot.Air_Time || "",
+            "Duration Sec": spot.Duration_Sec || spot.Spot_Duration || "",
+            "Spot Copy Caption": spot.Spot_Copy_Caption || "",
+            "Rate INR": spot.Rate_INR || spot.Rate || "",
+            "Calculated Amount INR": spot.Calculated_Amount_INR || spot.Amount || "",
+          }));
+        } else if (docType === "monitoring") {
+          resolvedSourceKey = "thirdPartyMonitoring";
+          rawRows = (payload.rows || []).map(row => ({
+            "File Name": file.name,
+            "Date": row.Date || "",
+            "Time": row.Time || "",
+            "Channel": row.Channel || "",
+            "Program": row.Program || "",
+            "Brand": row.Brand || "",
+            "Advertiser": row.Advertiser || "",
+            "Duration": row.Duration || "",
+            "Proof of Performance": row.Proof_of_Performance || row["Proof of Performance"] || "Yes",
+            "Expense Monitoring": row.Expense_Monitoring || row["Expense Monitoring"] || "",
+          }));
+        }
+      } else {
+        resolvedSourceKey = APP_SOURCE_TYPES[payload.sourceType] || sourceKey;
+        rawRows = payload.rows || [];
+      }
+
       return {
         ok: true,
         sourceKey: resolvedSourceKey,
-        rows: normalizeExtractorApiRows(payload.rows || [], resolvedSourceKey, file.name, payload),
+        rows: normalizeExtractorApiRows(rawRows, resolvedSourceKey, file.name, {
+          ...payload,
+          warnings,
+          missingFields,
+          template,
+          confidence
+        }),
       };
-    } catch {
-      // Try the next endpoint candidate, then fall back to browser extraction.
+    } catch (e) {
+      console.warn("API extraction error:", e);
     }
   }
   return { ok: false };
@@ -2208,6 +2416,10 @@ function renderColumnPanel() {
   columns.forEach((column) => {
     const label = document.createElement("label");
     label.className = "column-toggle";
+    label.style.display = "flex";
+    label.style.alignItems = "center";
+    label.style.gap = "4px";
+    
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = !hidden.includes(column);
@@ -2219,7 +2431,31 @@ function renderColumnPanel() {
       state.dirty = true;
       renderGrid();
     });
+    
     label.append(input, document.createTextNode(column));
+
+    // Get suffix like in makeColumnHeader
+    let suffix = null;
+    const activeView = state.activeView;
+    if (SOURCE_CONFIG[activeView]) {
+      if (SOURCE_CONFIG[activeView].columns.includes(column)) {
+        suffix = SOURCE_SUFFIX[activeView];
+      }
+    }
+    if (!suffix) {
+      suffix = COLUMN_TO_SUFFIX[column];
+    }
+    if (suffix) {
+      const suffixSpan = document.createElement("span");
+      suffixSpan.className = "th-suffix";
+      suffixSpan.textContent = suffix;
+      suffixSpan.title = `Source: ${suffix}`;
+      suffixSpan.style.marginLeft = "4px";
+      suffixSpan.style.fontSize = "7px";
+      suffixSpan.style.padding = "0px 3px";
+      label.appendChild(suffixSpan);
+    }
+
     panel.appendChild(label);
   });
 }
@@ -2416,6 +2652,38 @@ function renderGrid() {
   ensureRowIds();
   const table = $("#invoice-grid");
   const rows = getFilteredRows();
+  const gridWrap = table.parentNode;
+  let emptyState = gridWrap ? gridWrap.querySelector(".grid-empty-state") : null;
+
+  if (rows.length === 0) {
+    table.style.display = "none";
+    if (gridWrap && !emptyState) {
+      emptyState = document.createElement("div");
+      emptyState.className = "grid-empty-state";
+      emptyState.innerHTML = `
+        <div class="empty-state-icon">📊</div>
+        <h3>No reconciliation data available</h3>
+        <p>Upload a campaign PDF file or load sample data to view results.</p>
+        <button id="load-sample-empty-btn" class="danger-action compact" type="button">Load Sample Data</button>
+      `;
+      gridWrap.appendChild(emptyState);
+      
+      const loadSampleBtn = emptyState.querySelector("#load-sample-empty-btn");
+      if (loadSampleBtn) {
+        loadSampleBtn.addEventListener("click", loadSample);
+      }
+    }
+    $("#record-count").textContent = `0 of ${getActiveRows().length} records`;
+    $("#save-status").textContent = state.dirty ? "Unsaved changes" : state.activeCaseId ? "Saved" : "Not saved";
+    table.innerHTML = "";
+    return;
+  }
+
+  table.style.display = "";
+  if (emptyState) {
+    emptyState.remove();
+  }
+
   const columns = getActiveColumns(rows);
   $("#record-count").textContent = `${rows.length} of ${getActiveRows().length} records`;
   $("#save-status").textContent = state.dirty ? "Unsaved changes" : state.activeCaseId ? "Saved" : "Not saved";
@@ -2710,22 +2978,56 @@ function getActiveColumns(rows, options = {}) {
     columns = columnsFromRows(rows);
   }
 
-  const METADATA_COLUMNS = [
-    "Source",
-    "Import ID",
-    "Document Type",
-    "File Name",
-    "Status",
-    "Source Type",
-    "PDF File Name",
-    "Extraction Review",
-    "Parser Confidence",
-    "Quality Issues",
-    "Template",
-    "Extractor Warnings",
-    "Missing Fields",
+  const METADATA_KEYWORDS = [
+    "source",
+    "import id",
+    "import_id",
+    "importid",
+    "document type",
+    "document_type",
+    "file name",
+    "filename",
+    "file_name",
+    "file",
+    "status",
+    "source type",
+    "source_type",
+    "pdf file name",
+    "pdf_file_name",
+    "pdf name",
+    "pdf_name",
+    "pdfname",
+    "pdf",
+    "pdf file",
+    "pdf_file",
+    "pdffile",
+    "extraction review",
+    "extraction_review",
+    "parser confidence",
+    "parser_confidence",
+    "confidence score",
+    "confidence_score",
+    "quality issues",
+    "quality_issues",
+    "template",
+    "extractor warnings",
+    "extractor_warnings",
+    "missing fields",
+    "missing_fields",
+    "review",
+    "warnings",
+    "confidence",
+    "missingfields",
+    "source proof",
+    "source_proof",
+    "extracted - review",
+    "extracted"
   ];
-  columns = columns.filter((col) => !METADATA_COLUMNS.includes(col));
+  columns = columns.filter((col) => {
+    const norm = col.toLowerCase().trim();
+    if (norm === "status" || norm === "file" || norm === "source") return false;
+    return !METADATA_KEYWORDS.includes(norm);
+  });
 
   columns = applyColumnOrder(columns);
   if (options.includeHidden) return columns;
@@ -3301,7 +3603,7 @@ async function loadCasesFromApi() {
   try {
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     if (!token) return null;
-    const response = await fetchWithTimeout(apiUrl("/api/cases"), { method: "GET", headers: { Authorization: `Bearer ${token}` } }, 900);
+    const response = await fetchWithTimeout(apiUrl("/api/cases"), { method: "GET", headers: { Authorization: `Bearer ${token}` } }, 15000);
     if (!response.ok) throw new Error("API unavailable");
     const payload = await response.json();
     apiOnline = true;
@@ -3326,7 +3628,7 @@ async function saveCaseToApi(caseItem) {
           case: caseItem,
         }),
       },
-      1800,
+      30000,
     );
     if (!response.ok) throw new Error("API save failed");
     const payload = await response.json();
@@ -3338,7 +3640,7 @@ async function saveCaseToApi(caseItem) {
   }
 }
 
-async function postApi(path, payload, timeoutMs = 2500) {
+async function postApi(path, payload, timeoutMs = 15000) {
   try {
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     const response = await fetchWithTimeout(

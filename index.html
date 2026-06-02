@@ -156,50 +156,63 @@
 
             <div id="campaign-panel" class="campaign-panel">
               <input id="campaign-name" type="hidden" value="Invoice reconciliation" />
-              <section class="unified-upload" aria-label="PDF upload intake">
+              <section class="unified-upload-container" aria-label="PDF upload intake">
                 <div class="upload-title">
                   <span class="upload-icon">UP</span>
                   <strong>Upload PDF Source File</strong>
-                  <button class="help-dot" type="button" data-help="unifiedUpload" aria-label="Upload help">i<span class="help-tooltip">Choose the PDF type, agency, medium, advertiser and campaign dates before extraction.</span></button>
+                  <button class="help-dot" type="button" data-help="unifiedUpload" aria-label="Upload help">i<span class="help-tooltip">Choose the PDF type, agency, medium, advertiser and campaign start date before extraction.</span></button>
                 </div>
-                <label class="upload-file-field">PDF file
-                  <input id="source-file-input" type="file" accept=".pdf" multiple />
-                </label>
-                <label>Data source
-                  <select id="source-type-select" required>
-                    <option value="">Choose source</option>
-                    <option value="mediaSchedule">Media Estimate/Schedule</option>
-                    <option value="agency">Agency Invoice</option>
-                    <option value="thirdPartyInvoice">Broadcaster / 3rd Party / Channel Invoice</option>
-                    <option value="thirdPartyMonitoring">3rd Party Monitoring</option>
-                    <option value="po">Purchase Order</option>
-                  </select>
-                </label>
-                <label>Agency name
-                  <input id="upload-agency" list="agency-options" type="text" placeholder="Select or type agency" required />
-                  <datalist id="agency-options"></datalist>
-                </label>
-                <label>Medium
-                  <select id="upload-medium" required>
-                    <option value=""></option>
-                    <option>TV</option>
-                    <option>Radio</option>
-                    <option>Print</option>
-                    <option>Digital</option>
-                    <option>Outdoor</option>
-                  </select>
-                </label>
-                <label>Advertiser name
-                  <input id="upload-advertiser" list="advertiser-options" type="text" placeholder="Select or type advertiser" required />
-                  <datalist id="advertiser-options"></datalist>
-                </label>
-                <label>Campaign start date
-                  <input id="campaign-start-date" type="date" required />
-                </label>
-                <label>Campaign end date
-                  <input id="campaign-end-date" type="date" required />
-                </label>
-                <button id="unified-import" class="danger-action compact" type="button">Extract</button>
+                
+                <div class="unified-upload-grid">
+                  <!-- Left side: Drag and drop area -->
+                  <div class="drag-drop-zone" id="drag-drop-zone" tabindex="0" role="button" aria-label="Drag and drop PDF files or click to browse">
+                    <div class="drag-drop-inner">
+                      <span class="drag-drop-icon">📂</span>
+                      <span class="drag-drop-text">Drag & drop PDFs here or <strong>browse files</strong></span>
+                      <span class="drag-drop-subtext">Only PDF files are supported</span>
+                      <div id="file-list-preview" class="file-list-preview hidden"></div>
+                      <input id="source-file-input" type="file" accept=".pdf" multiple style="display: none;" />
+                    </div>
+                  </div>
+                  
+                  <!-- Right side: Metadata options -->
+                  <div class="metadata-card">
+                    <label>Data source
+                      <select id="source-type-select" required>
+                        <option value="">Choose source</option>
+                        <option value="mediaSchedule">Media Estimate/Schedule</option>
+                        <option value="agency">Agency Invoice</option>
+                        <option value="thirdPartyInvoice">Broadcaster / 3rd Party / Channel Invoice</option>
+                        <option value="thirdPartyMonitoring">3rd Party Monitoring</option>
+                        <option value="po">Purchase Order</option>
+                      </select>
+                    </label>
+                    <label>Agency name
+                      <input id="upload-agency" list="agency-options" type="text" placeholder="Select or type agency" required />
+                      <datalist id="agency-options"></datalist>
+                    </label>
+                    <label>Medium
+                      <select id="upload-medium" required>
+                        <option value=""></option>
+                        <option>TV</option>
+                        <option>Radio</option>
+                        <option>Print</option>
+                        <option>Digital</option>
+                        <option>Outdoor</option>
+                      </select>
+                    </label>
+                    <label>Advertiser name
+                      <input id="upload-advertiser" list="advertiser-options" type="text" placeholder="Select or type advertiser" required />
+                      <datalist id="advertiser-options"></datalist>
+                    </label>
+                    <label>Campaign start date
+                      <input id="campaign-start-date" type="date" required />
+                    </label>
+                    <div class="action-btn-cell">
+                      <button id="unified-import" class="danger-action compact" type="button">Extract</button>
+                    </div>
+                  </div>
+                </div>
               </section>
 
               <section class="source-tabs" aria-label="Accounting data tabs">
