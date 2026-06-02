@@ -2770,7 +2770,7 @@ function renderGrid() {
       emptyState = document.createElement("div");
       emptyState.className = "grid-empty-state";
       emptyState.innerHTML = `
-        <div class="empty-state-icon">📊</div>
+        <div class="empty-state-icon">?</div>
         <h3>No reconciliation data available</h3>
         <p>Upload a campaign PDF file or load sample data to view results.</p>
         <button id="load-sample-empty-btn" class="danger-action compact" type="button">Load Sample Data</button>
@@ -2784,6 +2784,10 @@ function renderGrid() {
     }
     $("#record-count").textContent = `0 of ${getActiveRows().length} records`;
     $("#save-status").textContent = state.dirty ? "Unsaved changes" : state.activeCaseId ? "Saved" : "Not saved";
+    
+    const pagWrap = $("#pagination-controls");
+    if (pagWrap) pagWrap.innerHTML = "";
+    
     table.innerHTML = "";
     return;
   }
@@ -2794,8 +2798,64 @@ function renderGrid() {
   }
 
   const columns = getActiveColumns(rows);
-  $("#record-count").textContent = `${rows.length} of ${getActiveRows().length} records`;
+  
+  if (!state.currentPage) state.currentPage = 1;
+  if (!state.pageSize) state.pageSize = 100;
+  
+  const totalRecords = rows.length;
+  const totalPages = Math.ceil(totalRecords / state.pageSize) || 1;
+  if (state.currentPage > totalPages) {
+    state.currentPage = totalPages;
+  }
+  if (state.currentPage < 1) {
+    state.currentPage = 1;
+  }
+  
+  const startIdx = (state.currentPage - 1) * state.pageSize;
+  const endIdx = startIdx + state.pageSize;
+  const paginatedRows = rows.slice(startIdx, endIdx);
+
+  const showingStart = totalRecords === 0 ? 0 : startIdx + 1;
+  const showingEnd = Math.min(endIdx, totalRecords);
+  $("#record-count").textContent = `Showing ${showingStart}-${showingEnd} of ${totalRecords} records (Page ${state.currentPage} of ${totalPages})`;
   $("#save-status").textContent = state.dirty ? "Unsaved changes" : state.activeCaseId ? "Saved" : "Not saved";
+  
+  let pagWrap = $("#pagination-controls");
+  if (!pagWrap) {
+    pagWrap = document.createElement("div");
+    pagWrap.id = "pagination-controls";
+    pagWrap.className = "pagination-controls";
+    const tableMeta = $(".table-meta");
+    if (tableMeta) {
+      tableMeta.appendChild(pagWrap);
+    }
+  }
+
+  pagWrap.innerHTML = `
+    <button class="pagination-btn" id="pag-first" ${state.currentPage === 1 ? "disabled" : ""} title="First Page">&lt;&lt;</button>
+    <button class="pagination-btn" id="pag-prev" ${state.currentPage === 1 ? "disabled" : ""} title="Previous Page">&lt;</button>
+    <span class="pagination-info">Page ${state.currentPage} of ${totalPages}</span>
+    <button class="pagination-btn" id="pag-next" ${state.currentPage === totalPages ? "disabled" : ""} title="Next Page">&gt;</button>
+    <button class="pagination-btn" id="pag-last" ${state.currentPage === totalPages ? "disabled" : ""} title="Last Page">&gt;&gt;</button>
+    <select class="pagination-select" id="pag-size">
+      <option value="50" ${state.pageSize === 50 ? "selected" : ""}>50 / page</option>
+      <option value="100" ${state.pageSize === 100 ? "selected" : ""}>100 / page</option>
+      <option value="200" ${state.pageSize === 200 ? "selected" : ""}>200 / page</option>
+      <option value="500" ${state.pageSize === 500 ? "selected" : ""}>500 / page</option>
+      <option value="1000" ${state.pageSize === 1000 ? "selected" : ""}>1000 / page</option>
+    </select>
+  `;
+
+  $("#pag-first").addEventListener("click", () => { state.currentPage = 1; renderGrid(); });
+  $("#pag-prev").addEventListener("click", () => { state.currentPage--; renderGrid(); });
+  $("#pag-next").addEventListener("click", () => { state.currentPage++; renderGrid(); });
+  $("#pag-last").addEventListener("click", () => { state.currentPage = totalPages; renderGrid(); });
+  $("#pag-size").addEventListener("change", (e) => {
+    state.pageSize = parseInt(e.target.value, 10);
+    state.currentPage = 1;
+    renderGrid();
+  });
+
   table.innerHTML = "";
   if (!columns.length) return;
 
@@ -2808,11 +2868,11 @@ function renderGrid() {
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
-  rows.forEach((row, rowIndex) => {
+  paginatedRows.forEach((row, rowIndex) => {
     const tr = document.createElement("tr");
     const indexCell = document.createElement("td");
     indexCell.className = "row-index";
-    indexCell.textContent = rowIndex + 1;
+    indexCell.textContent = startIdx + rowIndex + 1;
     tr.appendChild(indexCell);
     columns.forEach((column) => {
       const td = document.createElement("td");
