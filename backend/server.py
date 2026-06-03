@@ -52,10 +52,27 @@ except Exception:
 
 
 ROOT = Path(__file__).resolve().parent
+FRONTEND_ROOT = ROOT.parent  # parent of backend/ = fronted/
 DB_PATH = ROOT / "mpro_reconciliation.db"
 SCHEMA_PATH = ROOT / "schema.sql"
 HOST = "127.0.0.1"
 PORT = 8787
+
+MIME_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".ico": "image/x-icon",
+    ".json": "application/json",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".mjs": "application/javascript; charset=utf-8",
+}
 
 
 SOURCE_TABLES = {
@@ -683,15 +700,20 @@ def list_cases():
     return cases
 
 
-def get_extracted_data_by_source(source_type):
+def get_extracted_data_by_source(source_type, limit=200, offset=0):
     if source_type not in SOURCE_TABLES:
-        return []
+        return [], 0
     table = SOURCE_TABLES[source_type]
+    case_subq = "(SELECT id FROM reconciliation_cases ORDER BY updated_at DESC LIMIT 1)"
     with connect() as conn:
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE case_id = {case_subq}"
+        ).fetchone()[0]
         rows = conn.execute(
-            f"SELECT raw_json FROM {table} WHERE case_id = (SELECT id FROM reconciliation_cases ORDER BY updated_at DESC LIMIT 1)"
+            f"SELECT raw_json FROM {table} WHERE case_id = {case_subq} LIMIT ? OFFSET ?",
+            (limit, offset)
         ).fetchall()
-    return [json.loads(row["raw_json"]) for row in rows]
+    return [json.loads(row["raw_json"]) for row in rows], total
 
 
 def save_extracted_data(datasets, metadata=None):
@@ -735,13 +757,43 @@ class Handler(BaseHTTPRequestHandler):
             json_response(self, 200, {"ok": True, "service": "MPro PDF extraction API", "available": _EXTRACTOR_AVAILABLE})
         elif path.startswith("/api/extracted-data/"):
             source_type = path.split("/")[-1]
-            data = get_extracted_data_by_source(source_type)
-            json_response(self, 200, {"data": data, "sourceType": source_type})
+            from urllib.parse import parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            limit = int(qs.get("limit", ["200"])[0])
+            offset = int(qs.get("offset", ["0"])[0])
+            limit = max(1, min(limit, 2000))  # cap at 2000 per page
+            data, total = get_extracted_data_by_source(source_type, limit=limit, offset=offset)
+            json_response(self, 200, {"data": data, "sourceType": source_type, "total": total, "limit": limit, "offset": offset})
         elif path == "/api/cases":
             if not require_user(self):
                 json_response(self, 401, {"error": "Unauthorized"})
                 return
             json_response(self, 200, {"cases": list_cases()})
+        elif not path.startswith("/api/"):
+            # Serve static frontend files
+            if path in ("/", "", "/index.html"):
+                file_path = FRONTEND_ROOT / "index.html"
+            else:
+                # Strip leading slash and resolve safely within FRONTEND_ROOT
+                rel = path.lstrip("/")
+                file_path = (FRONTEND_ROOT / rel).resolve()
+                # Security: prevent directory traversal
+                try:
+                    file_path.relative_to(FRONTEND_ROOT.resolve())
+                except ValueError:
+                    json_response(self, 403, {"error": "Forbidden"})
+                    return
+            if file_path.is_file():
+                suffix = file_path.suffix.lower()
+                content_type = MIME_TYPES.get(suffix, "application/octet-stream")
+                data = file_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                json_response(self, 404, {"error": "File not found"})
         else:
             json_response(self, 404, {"error": "Not found"})
 

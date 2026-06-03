@@ -2047,9 +2047,34 @@ function normalizeRows(rows, sourceKey, fileName = "") {
   if (!config) return { columns: columnsFromRows(rows), rows };
   
   const mappings = {
+    agency: {
+      "Agency_Name": "Agency Name",
+      "Advertiser_Name": "Advertiser Name",
+      "Invoice_Number": "Invoice Number",
+      "Invoice_Date": "Invoice Date",
+      "Activity_Month": "Campaign Period",
+      "Estimate_Number": "Estimate Number",
+      "Estimate_Period": "Estimate Period",
+      "PO_Number": "PO Number",
+      "Brand_Name": "Brand",
+      "Campaign_Name": "Campaign Name",
+      "Total_Value_Incl_Taxes": "Total Value Including Taxes",
+      "Channel": "Channel Name",
+      "Channel_Name": "Channel Name",
+      "Broadcaster_Producer": "Broadcaster Name",
+      "Broadcaster_Name": "Broadcaster Name",
+      "Time_Band": "Time Band",
+      "Spot_Duration": "Spot Duration",
+      "Spot_Rate_Per_10s": "Spot Rate Per 10 Sec",
+      "No_of_Spots": "Date Wise Spots",
+      "Net_Cost": "Net Cost",
+      "file": "File Name",
+    },
     thirdPartyInvoice: {
       "Broadcaster_Name": "Third Party Vendor Name",
       "Broadcaster Name": "Third Party Vendor Name",
+      "Advertiser_Name": "Advertiser Name",
+      "Agency_Name": "Agency Name",
       "Channel_Name": "Channel Name",
       "Channel": "Channel Name",
       "Billing_Period": "Billing Period",
@@ -2066,6 +2091,7 @@ function normalizeRows(rows, sourceKey, fileName = "") {
       "Rate_INR": "Rate INR",
       "Amount": "Calculated Amount INR",
       "Calculated_Amount_INR": "Calculated Amount INR",
+      "file": "File Name",
     },
     thirdPartyMonitoring: {
       "Broadcaster_Name": "Third Party Vendor Name",
@@ -2082,7 +2108,9 @@ function normalizeRows(rows, sourceKey, fileName = "") {
       "Caption": "Spot Copy Caption",
       "Spot_Copy": "Spot Copy Caption",
       "Spot_Copy_Caption": "Spot Copy Caption",
+      "Product": "Brand",
       "Status": "Monitoring Status",
+      "file": "File Name",
     }
   }[sourceKey] || {};
 
@@ -2249,10 +2277,17 @@ async function saveCaseSilent() {
 }
 
 function saveDraftState() {
+  // Don't save backend-loaded large datasets to localStorage (5MB limit).
+  // Backend data is always reloaded from the API on startup.
+  const BACKEND_LOADED_THRESHOLD = 500; // rows — if a source has more than this, it came from the batch backend
+  const datasetsForDraft = {};
+  for (const [key, rows] of Object.entries(state.datasets || {})) {
+    datasetsForDraft[key] = (rows || []).length > BACKEND_LOADED_THRESHOLD ? [] : rows;
+  }
   const draft = {
     activeCaseId: state.activeCaseId,
     campaignName: $("#campaign-name")?.value || "",
-    datasets: state.datasets,
+    datasets: datasetsForDraft,
     columnOrders: state.columnOrders,
     columnWidths: state.columnWidths,
     hiddenColumns: state.hiddenColumns,
@@ -2260,7 +2295,12 @@ function saveDraftState() {
     activeView: state.activeView,
     updatedAt: new Date().toISOString(),
   };
-  localStorage.setItem("mpro.draft.state", JSON.stringify(draft));
+  try {
+    localStorage.setItem("mpro.draft.state", JSON.stringify(draft));
+  } catch (e) {
+    // localStorage quota exceeded — skip draft save silently
+    console.warn("Draft state too large for localStorage, skipping:", e);
+  }
   debouncedSaveCase();
 }
 
@@ -3890,7 +3930,11 @@ async function loadExtractedDataFromBackend(sourceType) {
     const response = await fetch(apiUrl(`/api/extracted-data/${sourceType}`));
     if (!response.ok) return [];
     const result = await response.json();
-    return result.data || [];
+    const rawRows = result.data || [];
+    if (!rawRows.length) return [];
+    // Re-use the existing normalizeRows pipeline (same mapping used for fresh PDF imports)
+    const normalized = normalizeRows(rawRows, sourceType, "");
+    return normalized.rows || [];
   } catch (error) {
     console.error("Backend load error:", error);
     return [];
@@ -3898,15 +3942,21 @@ async function loadExtractedDataFromBackend(sourceType) {
 }
 
 async function loadExtractedDataFromBackendToState() {
-  const sourceTypes = ["po", "agency", "thirdPartyInvoice", "thirdPartyMonitoring", "mediaSchedule"];
+  const sourceTypes = ["agency", "thirdPartyInvoice", "thirdPartyMonitoring", "po", "mediaSchedule"];
+  let anyLoaded = false;
   for (const sourceType of sourceTypes) {
+    // Only load from backend if the current state is empty for this source type
+    if ((state.datasets[sourceType] || []).length > 0) continue;
     const data = await loadExtractedDataFromBackend(sourceType);
     if (data.length > 0) {
       state.datasets[sourceType] = data;
+      anyLoaded = true;
     }
   }
-  deriveProgramAndPrRows();
-  renderAll();
+  if (anyLoaded) {
+    deriveProgramAndPrRows();
+    renderAll();
+  }
 }
 
 async function clearExtractedDataFromBackend() {
