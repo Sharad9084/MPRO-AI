@@ -14,6 +14,13 @@ const IS_LOCAL_APP = ["", "localhost", "127.0.0.1"].includes(window.location.hos
 const API_BASE = configuredApiBase || (IS_LOCAL_APP ? LOCAL_API_BASE : "");
 let apiOnline = false;
 
+// Caching variables for cross-reference enrichment speedup
+let cachedEnrichedRows = null;
+let cachedSourceView = null;
+let cachedDatasetsLength = -1;
+let cachedDatasetsVersion = 0;
+let datasetsVersion = 0;
+
 const USERS = [
   {
     username: "auditor@mpro.com",
@@ -2986,6 +2993,7 @@ function renderGrid() {
         $("#save-status").textContent = "Unsaved changes";
       });
       input.addEventListener("blur", () => {
+        datasetsVersion++;
         if (!["program", "pr"].includes(state.activeView)) deriveProgramAndPrRows({ overwrite: false });
         renderAll();
       });
@@ -3157,17 +3165,27 @@ function enrichRow(row, sourceKey, index, columns) {
 }
 
 function getFilteredRows() {
-  let rows = [...getActiveRows()];
+  let rows;
 
   if (state.activeView !== "reconciliation") {
-    const crossRefIndex = buildCrossRefIndex();
-    const allCols = getActiveColumns(rows, { includeHidden: true });
-    rows = rows.map((row) => {
-      const { enrichedRow, crossFills } = enrichRow(row, state.activeView, crossRefIndex, allCols);
-      enrichedRow.__crossFills = crossFills;
-      enrichedRow.__originalRow = row;
-      return enrichedRow;
-    });
+    const currentLength = Object.values(state.datasets).reduce((sum, list) => sum + (list?.length || 0), 0);
+    if (cachedSourceView !== state.activeView || cachedDatasetsLength !== currentLength || cachedDatasetsVersion !== datasetsVersion || !cachedEnrichedRows) {
+      const activeRows = getActiveRows();
+      const crossRefIndex = buildCrossRefIndex();
+      const allCols = getActiveColumns(activeRows, { includeHidden: true });
+      cachedEnrichedRows = activeRows.map((row) => {
+        const { enrichedRow, crossFills } = enrichRow(row, state.activeView, crossRefIndex, allCols);
+        enrichedRow.__crossFills = crossFills;
+        enrichedRow.__originalRow = row;
+        return enrichedRow;
+      });
+      cachedSourceView = state.activeView;
+      cachedDatasetsLength = currentLength;
+      cachedDatasetsVersion = datasetsVersion;
+    }
+    rows = [...cachedEnrichedRows];
+  } else {
+    rows = [...getActiveRows()];
   }
 
   rows = rows.filter(matchesGlobalFilters).filter(matchesAccountingFilters);
