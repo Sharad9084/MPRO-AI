@@ -692,7 +692,7 @@ async function loadState() {
       const draftTime = new Date(draft.updatedAt || 0).getTime();
       const dbTime = latestDbCase ? new Date(latestDbCase.updatedAt || 0).getTime() : 0;
 
-      if (draftTime >= dbTime) {
+      if (draftTime >= dbTime && (countRows(draft.datasets) > 0 || !latestDbCase)) {
         loadFromDraft = true;
         state.activeCaseId = draft.activeCaseId;
         state.datasets = draft.datasets || emptyDatasets();
@@ -957,9 +957,29 @@ async function handleSignin() {
   const duration = remember ? 30 * 24 * 60 * 60 * 1000 : (result.data.expiresInSeconds || 8 * 60 * 60) * 1000;
   localStorage.setItem(STORAGE_KEYS.session, JSON.stringify({ user: state.currentUser, token: result.data.token, expiresAt: Date.now() + duration }));
   state.cases = await loadCasesFromApi() || readJSON(STORAGE_KEYS.cases, []);
-  const active = getActiveCase();
-  if (active) hydrateCase(active);
+  
+  let activeCase = null;
+  state.activeCaseId = localStorage.getItem(STORAGE_KEYS.activeCase);
+  if (state.activeCaseId) {
+    activeCase = state.cases.find(c => c.id === state.activeCaseId);
+  }
+  if (!activeCase && state.cases.length > 0) {
+    const sortedCases = [...state.cases].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    activeCase = sortedCases[0];
+    state.activeCaseId = activeCase.id;
+    localStorage.setItem(STORAGE_KEYS.activeCase, activeCase.id);
+  }
+  
+  if (activeCase) {
+    hydrateCase(activeCase);
+    if ($("#campaign-name")) $("#campaign-name").value = activeCase.name;
+  }
+  
   showApp();
+
+  setTimeout(() => {
+    loadExtractedDataFromBackendToState(state.activeView).catch(() => {});
+  }, 300);
 }
 
 async function signInWithLocalAccount(username, password) {
