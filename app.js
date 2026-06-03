@@ -835,6 +835,7 @@ function bindEvents() {
   $("#collapse-filters").addEventListener("click", () => setFiltersCollapsed(true));
   $("#expand-filters").addEventListener("click", () => setFiltersCollapsed(false));
   $("#load-sample")?.addEventListener("click", loadSample);
+  $("#switch-campaign-btn").addEventListener("click", showExistingCases);
   $("#add-row").addEventListener("click", addRow);
   $("#column-settings").addEventListener("click", toggleColumnPanel);
   $("#export-csv").addEventListener("click", exportCsv);
