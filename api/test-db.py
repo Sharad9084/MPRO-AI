@@ -21,11 +21,17 @@ class handler(BaseHTTPRequestHandler):
                 
                 # 2. Check counts for the specific case
                 case_id = "e3ac65e8-3ab1-4bcf-80c2-c6603ab87716"
+                
+                po_row = conn.execute("SELECT COUNT(*) AS cnt FROM po_records WHERE case_id = %s", (case_id,)).fetchone()
+                agency_row = conn.execute("SELECT COUNT(*) AS cnt FROM agency_invoice_records WHERE case_id = %s", (case_id,)).fetchone()
+                invoice_row = conn.execute("SELECT COUNT(*) AS cnt FROM third_party_invoice_records WHERE case_id = %s", (case_id,)).fetchone()
+                monitoring_row = conn.execute("SELECT COUNT(*) AS cnt FROM third_party_monitoring_records WHERE case_id = %s", (case_id,)).fetchone()
+                
                 results["case_details"] = {
-                    "po": conn.execute("SELECT COUNT(*) FROM po_records WHERE case_id = %s", (case_id,)).fetchone()[0],
-                    "agency": conn.execute("SELECT COUNT(*) FROM agency_invoice_records WHERE case_id = %s", (case_id,)).fetchone()[0],
-                    "third_party_invoice": conn.execute("SELECT COUNT(*) FROM third_party_invoice_records WHERE case_id = %s", (case_id,)).fetchone()[0],
-                    "third_party_monitoring": conn.execute("SELECT COUNT(*) FROM third_party_monitoring_records WHERE case_id = %s", (case_id,)).fetchone()[0],
+                    "po": po_row["cnt"] if po_row else 0,
+                    "agency": agency_row["cnt"] if agency_row else 0,
+                    "third_party_invoice": invoice_row["cnt"] if invoice_row else 0,
+                    "third_party_monitoring": monitoring_row["cnt"] if monitoring_row else 0,
                 }
                 
             send_json(self, 200, results)
