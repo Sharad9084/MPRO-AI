@@ -726,12 +726,12 @@ async function loadState() {
   refreshMasterOptionsFromCases();
   refreshMasterOptionsFromDatasets();
 
-  // Load extracted data from backend (wrapped to prevent startup crash on large datasets)
-  try {
-    await loadExtractedDataFromBackendToState();
-  } catch (e) {
-    console.warn("Could not load latest extracted data from backend:", e);
-  }
+  // Lazily load data for active tab in background — non-blocking
+  // Full data loads when user clicks on each tab (see switchView)
+  setTimeout(() => {
+    loadExtractedDataFromBackendToState(state.activeView).catch(() => {});
+  }, 500);
+
 }
 
 function keepKnownFilters(filters, allowedKeys) {
@@ -1134,6 +1134,10 @@ function switchView(view) {
   state.activeView = view;
   $$(".source-tab").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
   renderGrid();
+  // Lazy-load backend data for this tab if not yet loaded
+  if (apiOnline && SOURCE_CONFIG[view]) {
+    loadExtractedDataFromBackendToState(view).catch(() => {});
+  }
 }
 
 function setFiltersCollapsed(collapsed) {
@@ -3925,31 +3929,47 @@ async function saveExtractedDataToBackend(datasets) {
   }
 }
 
-async function loadExtractedDataFromBackend(sourceType) {
+async function loadExtractedDataFromBackend(sourceType, offset = 0, limit = 200) {
   try {
-    const response = await fetch(apiUrl(`/api/extracted-data/${sourceType}`));
-    if (!response.ok) return [];
+    const url = apiUrl(`/api/extracted-data/${sourceType}?limit=${limit}&offset=${offset}`);
+    const response = await fetch(url);
+    if (!response.ok) return { rows: [], total: 0 };
     const result = await response.json();
     const rawRows = result.data || [];
-    if (!rawRows.length) return [];
+    if (!rawRows.length) return { rows: [], total: result.total || 0 };
     // Re-use the existing normalizeRows pipeline (same mapping used for fresh PDF imports)
     const normalized = normalizeRows(rawRows, sourceType, "");
-    return normalized.rows || [];
+    return { rows: normalized.rows || [], total: result.total || 0 };
   } catch (error) {
     console.error("Backend load error:", error);
-    return [];
+    return { rows: [], total: 0 };
   }
 }
 
-async function loadExtractedDataFromBackendToState() {
-  const sourceTypes = ["agency", "thirdPartyInvoice", "thirdPartyMonitoring", "po", "mediaSchedule"];
+// Track backend totals (for display) and loaded offsets per source
+const backendTotals = {};
+const backendLoaded = {};
+
+async function loadExtractedDataFromBackendToState(sourceType = null) {
+  // If no sourceType given, load only the currently active view
+  const targets = sourceType
+    ? [sourceType]
+    : [state.activeView].filter(k => SOURCE_CONFIG[k]);
+
   let anyLoaded = false;
-  for (const sourceType of sourceTypes) {
-    // Only load from backend if the current state is empty for this source type
-    if ((state.datasets[sourceType] || []).length > 0) continue;
-    const data = await loadExtractedDataFromBackend(sourceType);
-    if (data.length > 0) {
-      state.datasets[sourceType] = data;
+  for (const key of targets) {
+    // Skip if already loaded from backend
+    if (backendLoaded[key]) continue;
+    // Skip if user already added rows manually for this source
+    if ((state.datasets[key] || []).length > 0) {
+      backendLoaded[key] = true;
+      continue;
+    }
+    const { rows, total } = await loadExtractedDataFromBackend(key, 0, 200);
+    backendTotals[key] = total;
+    if (rows.length > 0) {
+      state.datasets[key] = rows;
+      backendLoaded[key] = true;
       anyLoaded = true;
     }
   }
