@@ -3992,11 +3992,37 @@ async function loadExtractedDataFromBackendToState(sourceType = null) {
       state.datasets[key] = rows;
       backendLoaded[key] = true;
       anyLoaded = true;
+      // Start background fetch for the remaining records if any
+      if (total > rows.length) {
+        fetchRemainingDataInBackground(key, rows.length, total);
+      }
     }
   }
   if (anyLoaded) {
     deriveProgramAndPrRows();
     renderAll();
+  }
+}
+
+async function fetchRemainingDataInBackground(sourceType, offset, total) {
+  const chunkSize = 2000;
+  try {
+    const { rows } = await loadExtractedDataFromBackend(sourceType, offset, chunkSize);
+    if (rows && rows.length > 0) {
+      state.datasets[sourceType] = [...(state.datasets[sourceType] || []), ...rows];
+      if (state.activeView === sourceType) {
+        deriveProgramAndPrRows();
+        renderAll();
+      }
+      const nextOffset = offset + rows.length;
+      if (nextOffset < total) {
+        setTimeout(() => {
+          fetchRemainingDataInBackground(sourceType, nextOffset, total);
+        }, 100);
+      }
+    }
+  } catch (err) {
+    console.error(`Background load failed for ${sourceType} at offset ${offset}:`, err);
   }
 }
 
