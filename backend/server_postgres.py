@@ -765,18 +765,30 @@ def list_cases_for_user(user):
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT raw_json, updated_at
+            SELECT id, raw_json, updated_at
             FROM reconciliation_cases
             WHERE user_id = %s OR user_id IS NULL
             ORDER BY updated_at DESC
             """,
             (user["id"],),
         ).fetchall()
+        
+        # Calculate counts for each case
+        case_counts = {}
+        for row in rows:
+            case_id = row["id"]
+            cnt = 0
+            for t in SOURCE_TABLES.values():
+                cnt += conn.execute(f"SELECT COUNT(*) AS cnt FROM {t} WHERE case_id = %s", (case_id,)).fetchone()["cnt"]
+            case_counts[case_id] = cnt
+
     cases = []
     for row in rows:
         case = row["raw_json"]
         if "datasets" in case:
             case["datasets"] = {}
+        case_id = row["id"]
+        case["totalRecords"] = case_counts.get(case_id, 0)
         case["updatedAt"] = row["updated_at"].isoformat() if hasattr(row["updated_at"], "isoformat") else row["updated_at"]
         cases.append(case)
     return cases

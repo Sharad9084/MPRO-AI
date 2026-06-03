@@ -1204,7 +1204,8 @@ function showExistingCases() {
     const button = document.createElement("button");
     button.className = "existing-card";
     button.type = "button";
-    button.innerHTML = `<strong>${escapeHTML(caseItem.name)}</strong><span>${countRows(caseItem.datasets)} records - ${formatDateTime(caseItem.updatedAt)}</span>`;
+    const count = caseItem.totalRecords !== undefined ? caseItem.totalRecords : countRows(caseItem.datasets);
+    button.innerHTML = `<strong>${escapeHTML(caseItem.name)}</strong><span>${count} records - ${formatDateTime(caseItem.updatedAt)}</span>`;
     button.addEventListener("click", () => loadCase(caseItem.id));
     list.appendChild(button);
   });
@@ -1218,8 +1219,18 @@ function loadCase(id) {
   hydrateCase(caseItem);
   $("#campaign-name").value = caseItem.name;
   $("#existing-list").classList.add("hidden");
+  
+  // Reset backend loaded states for the new campaign
+  for (const key in backendLoaded) {
+    backendLoaded[key] = false;
+    delete backendTotals[key];
+  }
+  
   renderAll();
   toast("Reconciliation loaded.");
+  
+  // Trigger loading data from backend for the new active case
+  loadExtractedDataFromBackendToState(state.activeView).catch(() => {});
 }
 
 function hydrateCase(caseItem) {
