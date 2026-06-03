@@ -20,7 +20,10 @@ def ensure_db():
     core.DATABASE_URL = core.configured_database_url()
     if not core.DATABASE_URL:
         raise RuntimeError("PostgreSQL connection string is not configured.")
-    core.init_db()
+    # Do not call core.init_db() on every container cold start, as it executes
+    # full schema DDL and column migrations, adding ~1.5s latency to requests.
+    # The DB is already initialized in production.
+    # core.init_db()
     DB_READY = True
 
 
