@@ -3931,7 +3931,8 @@ async function saveExtractedDataToBackend(datasets) {
 
 async function loadExtractedDataFromBackend(sourceType, offset = 0, limit = 200) {
   try {
-    const url = apiUrl(`/api/extracted-data/${sourceType}?limit=${limit}&offset=${offset}`);
+    const caseParam = state.activeCaseId ? `&case_id=${encodeURIComponent(state.activeCaseId)}` : "";
+    const url = apiUrl(`/api/extracted-data/${sourceType}?limit=${limit}&offset=${offset}${caseParam}`);
     const response = await fetch(url);
     if (!response.ok) return { rows: [], total: 0 };
     const result = await response.json();

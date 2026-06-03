@@ -4,5 +4,11 @@
     "api/**/*.py": {
       "excludeFiles": "{sample-*.csv,backend/mpro_reconciliation.db}"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/extracted-data/:source",
+      "destination": "/api/extracted-data"
+    }
+  ]
 }
