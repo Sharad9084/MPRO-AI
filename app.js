@@ -3849,7 +3849,7 @@ async function loadCasesFromApi() {
   try {
     const token = readJSON(STORAGE_KEYS.session, {})?.token;
     if (!token) return null;
-    const response = await fetchWithTimeout(apiUrl("/api/cases"), { method: "GET", headers: { Authorization: `Bearer ${token}` } }, 15000);
+    const response = await fetchWithTimeout(apiUrl(`/api/cases?_t=${Date.now()}`), { method: "GET", headers: { Authorization: `Bearer ${token}` } }, 15000);
     if (!response.ok) throw new Error("API unavailable");
     const payload = await response.json();
     apiOnline = true;
@@ -3965,7 +3965,7 @@ async function saveExtractedDataToBackend(datasets) {
 async function loadExtractedDataFromBackend(sourceType, offset = 0, limit = 200) {
   try {
     const caseParam = state.activeCaseId ? `&case_id=${encodeURIComponent(state.activeCaseId)}` : "";
-    const url = apiUrl(`/api/extracted-data/${sourceType}?limit=${limit}&offset=${offset}${caseParam}`);
+    const url = apiUrl(`/api/extracted-data/${sourceType}?limit=${limit}&offset=${offset}${caseParam}&_t=${Date.now()}`);
     const response = await fetch(url);
     if (!response.ok) return { rows: [], total: 0 };
     const result = await response.json();
