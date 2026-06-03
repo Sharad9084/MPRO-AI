@@ -691,8 +691,9 @@ async function loadState() {
       const draft = JSON.parse(draftStr);
       const draftTime = new Date(draft.updatedAt || 0).getTime();
       const dbTime = latestDbCase ? new Date(latestDbCase.updatedAt || 0).getTime() : 0;
+      const draftCaseExists = draft.activeCaseId && state.cases.some(c => c.id === draft.activeCaseId);
 
-      if (draftTime >= dbTime && (countRows(draft.datasets) > 0 || !latestDbCase)) {
+      if (draftTime >= dbTime && (countRows(draft.datasets) > 0 || !latestDbCase) && (draftCaseExists || !apiOnline)) {
         loadFromDraft = true;
         state.activeCaseId = draft.activeCaseId;
         state.datasets = draft.datasets || emptyDatasets();
@@ -3981,8 +3982,8 @@ async function loadExtractedDataFromBackendToState(sourceType = null) {
   for (const key of targets) {
     // Skip if already loaded from backend
     if (backendLoaded[key]) continue;
-    // Skip if user already added rows manually for this source
-    if ((state.datasets[key] || []).length > 0) {
+    // Skip if user already added rows manually for this source (only in offline mode)
+    if (!apiOnline && (state.datasets[key] || []).length > 0) {
       backendLoaded[key] = true;
       continue;
     }
