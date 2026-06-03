@@ -775,6 +775,8 @@ def list_cases_for_user(user):
     cases = []
     for row in rows:
         case = row["raw_json"]
+        if "datasets" in case:
+            case["datasets"] = {}
         case["updatedAt"] = row["updated_at"].isoformat() if hasattr(row["updated_at"], "isoformat") else row["updated_at"]
         cases.append(case)
     return cases
