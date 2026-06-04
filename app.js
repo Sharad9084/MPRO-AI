@@ -13,6 +13,10 @@ const configuredApiBase = window.TAG_MPRO_API_BASE || localStorage.getItem("mpro
 const IS_LOCAL_APP = ["", "localhost", "127.0.0.1"].includes(window.location.hostname);
 const API_BASE = configuredApiBase || (IS_LOCAL_APP ? LOCAL_API_BASE : "");
 let apiOnline = false;
+const PDFJS_VERSION = "4.9.155";
+let pdfJsLoadPromise = null;
+const BACKEND_SOURCE_TYPES = ["po", "mediaSchedule", "agency", "thirdPartyInvoice", "thirdPartyMonitoring"];
+let backendWarmLoadTimer = null;
 
 // Caching variables for cross-reference enrichment speedup
 let cachedEnrichedRows = null;
@@ -740,12 +744,6 @@ async function loadState() {
 
   refreshMasterOptionsFromCases();
   refreshMasterOptionsFromDatasets();
-
-  // Load data for all tabs in background — non-blocking
-  setTimeout(() => {
-    loadExtractedDataFromBackendToState(null).catch(() => {});
-  }, 500);
-
 }
 
 function keepKnownFilters(filters, allowedKeys) {
@@ -991,9 +989,7 @@ async function handleSignin() {
   
   showApp();
 
-  setTimeout(() => {
-    loadExtractedDataFromBackendToState(null).catch(() => {});
-  }, 300);
+  scheduleBackendWarmLoad({ delay: 300 });
 }
 
 async function signInWithLocalAccount(username, password) {
@@ -1142,6 +1138,7 @@ function restoreSession() {
   }
   state.currentUser = session.user;
   showApp();
+  if (session.token) scheduleBackendWarmLoad({ delay: 300 });
 }
 
 async function signOut() {
@@ -1242,7 +1239,7 @@ function loadCase(id) {
   toast("Reconciliation loaded.");
   
   // Trigger loading data from backend for the new active case
-  loadExtractedDataFromBackendToState(null).catch(() => {});
+  scheduleBackendWarmLoad({ delay: 150 });
 }
 
 function hydrateCase(caseItem) {
@@ -1716,11 +1713,25 @@ function normalizeExtractorApiRows(rows, sourceKey, fileName, payload = {}) {
   });
 }
 
-async function extractPdfTextInBrowser(file) {
-  if (!window.pdfjsLib) {
-    throw new Error("PDF reader is still loading or offline. Refresh once with internet access, then upload the PDF again.");
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (!pdfJsLoadPromise) {
+    pdfJsLoadPromise = import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`)
+      .then((pdfjsLib) => {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+        window.pdfjsLib = pdfjsLib;
+        return pdfjsLib;
+      })
+      .catch((error) => {
+        pdfJsLoadPromise = null;
+        throw new Error("PDF reader could not load. Check your internet connection, then upload the PDF again.", { cause: error });
+      });
   }
-  const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  return pdfJsLoadPromise;
+}
+async function extractPdfTextInBrowser(file) {
+  const pdfjsLib = await loadPdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   const pages = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
@@ -4110,21 +4121,55 @@ async function saveExtractedDataToBackend(datasets) {
   }
 }
 
+function hasCloudSession() {
+  const session = readJSON(STORAGE_KEYS.session, null);
+  return Boolean(session?.token && Date.now() <= session.expiresAt);
+}
+
+function scheduleBackendWarmLoad({ delay = 300 } = {}) {
+  clearTimeout(backendWarmLoadTimer);
+  if (!hasCloudSession()) return;
+  backendWarmLoadTimer = setTimeout(async () => {
+    if (!hasCloudSession()) return;
+    const activeSource = BACKEND_SOURCE_TYPES.includes(state.activeView) ? state.activeView : "agency";
+    await loadExtractedDataFromBackendToState(activeSource);
+    scheduleRemainingBackendWarmLoad(activeSource);
+  }, delay);
+}
+
+function scheduleRemainingBackendWarmLoad(activeSource) {
+  const loadRemaining = () => {
+    loadBackendSourcesSequentially(BACKEND_SOURCE_TYPES.filter((source) => source !== activeSource)).catch(() => {});
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(loadRemaining, { timeout: 3000 });
+  } else {
+    setTimeout(loadRemaining, 2500);
+  }
+}
+
+async function loadBackendSourcesSequentially(sources) {
+  for (const source of sources) {
+    if (!hasCloudSession()) return;
+    await loadExtractedDataFromBackendToState(source);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+}
 async function loadExtractedDataFromBackend(sourceType, offset = 0, limit = 200) {
   try {
     const caseParam = state.activeCaseId ? `&case_id=${encodeURIComponent(state.activeCaseId)}` : "";
     const url = apiUrl(`/api/extracted-data/${sourceType}?limit=${limit}&offset=${offset}${caseParam}&_t=${Date.now()}`);
     const response = await fetch(url);
-    if (!response.ok) return { rows: [], total: 0 };
+    if (!response.ok) return { rows: [], total: 0, ok: false };
     const result = await response.json();
     const rawRows = result.data || [];
-    if (!rawRows.length) return { rows: [], total: result.total || 0 };
+    if (!rawRows.length) return { rows: [], total: result.total || 0, ok: true };
     // Re-use the existing normalizeRows pipeline (same mapping used for fresh PDF imports)
     const normalized = normalizeRows(rawRows, sourceType, "");
-    return { rows: normalized.rows || [], total: result.total || 0 };
+    return { rows: normalized.rows || [], total: result.total || 0, ok: true };
   } catch (error) {
     console.error("Backend load error:", error);
-    return { rows: [], total: 0 };
+    return { rows: [], total: 0, ok: false };
   }
 }
 
@@ -4147,11 +4192,12 @@ async function loadExtractedDataFromBackendToState(sourceType = null) {
       backendLoaded[key] = true;
       continue;
     }
-    const { rows, total } = await loadExtractedDataFromBackend(key, 0, 200);
+    const { rows, total, ok } = await loadExtractedDataFromBackend(key, 0, 200);
+    if (!ok) continue;
     backendTotals[key] = total;
+    backendLoaded[key] = true;
     if (rows.length > 0) {
       state.datasets[key] = rows;
-      backendLoaded[key] = true;
       anyLoaded = true;
       // Start background fetch for the remaining records if any
       if (total > rows.length) {
