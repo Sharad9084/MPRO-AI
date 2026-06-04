@@ -3319,19 +3319,69 @@ function deriveProgramAndPrRows(options = {}) {
   const programRows = new Map((options.overwrite === false ? state.datasets.program : []).map((row) => [readField(row, "campaignId") || readField(row, "campaign"), row]));
   const prRows = new Map((options.overwrite === false ? state.datasets.pr : []).map((row) => [readField(row, "prNumber"), row]));
 
-  sourceRows.forEach((row) => {
+  // Pre-calculate mapped fields and groupings to avoid O(N^2) loops
+  const programGroupBudget = {};
+  const programGroupPrAmount = {};
+  const programGroupPoAmount = {};
+  const programGroupTotalValue = {};
+
+  const prGroupPrAmount = {};
+  const prGroupPoAmount = {};
+  const prGroupTotalValue = {};
+
+  const rowDetails = sourceRows.map(row => {
     const campaignId = readField(row, "campaignId");
     const campaign = readField(row, "campaign");
     const programKey = campaignId || campaign;
+    const prNumber = readField(row, "prNumber");
+    
+    const budgetVal = parseNumber(readField(row, "budget"));
+    const prAmountVal = parseNumber(readField(row, "prAmount"));
+    const poAmountVal = parseNumber(readField(row, "poAmount"));
+    const totalValueVal = parseNumber(readField(row, "totalValue"));
+
+    return {
+      row,
+      campaignId,
+      campaign,
+      programKey,
+      prNumber,
+      budget: Number.isNaN(budgetVal) ? 0 : budgetVal,
+      prAmount: Number.isNaN(prAmountVal) ? 0 : prAmountVal,
+      poAmount: Number.isNaN(poAmountVal) ? 0 : poAmountVal,
+      totalValue: Number.isNaN(totalValueVal) ? 0 : totalValueVal
+    };
+  });
+
+  rowDetails.forEach(detail => {
+    const pKey = detail.programKey;
+    if (pKey) {
+      programGroupBudget[pKey] = (programGroupBudget[pKey] || 0) + detail.budget;
+      programGroupPrAmount[pKey] = (programGroupPrAmount[pKey] || 0) + detail.prAmount;
+      programGroupPoAmount[pKey] = (programGroupPoAmount[pKey] || 0) + detail.poAmount;
+      programGroupTotalValue[pKey] = (programGroupTotalValue[pKey] || 0) + detail.totalValue;
+    }
+
+    const prNo = detail.prNumber;
+    if (prNo) {
+      prGroupPrAmount[prNo] = (prGroupPrAmount[prNo] || 0) + detail.prAmount;
+      prGroupPoAmount[prNo] = (prGroupPoAmount[prNo] || 0) + detail.poAmount;
+      prGroupTotalValue[prNo] = (prGroupTotalValue[prNo] || 0) + detail.totalValue;
+    }
+  });
+
+  rowDetails.forEach(detail => {
+    const { row, campaignId, campaign, programKey, prNumber } = detail;
+
     if (programKey && !programRows.has(programKey)) {
-      const related = sourceRows.filter((item) => (campaignId && readField(item, "campaignId") === campaignId) || (campaign && readField(item, "campaign") === campaign));
+      const budget = programGroupBudget[programKey] || programGroupPrAmount[programKey] || programGroupPoAmount[programKey] || programGroupTotalValue[programKey] || "";
       programRows.set(programKey, {
         Source: "Derived Program",
         "Campaign ID": campaignId,
         "Campaign Name": campaign,
         "Program Name": readField(row, "programName") || readField(row, "program"),
         "Campaign Type": readField(row, "campaignType"),
-        Budget: String(sumValues(related, "budget") || sumValues(related, "prAmount") || sumValues(related, "poAmount") || sumValues(related, "totalValue") || ""),
+        Budget: String(budget),
         "Program Manager": readField(row, "programManager"),
         "Campaign Manager": readField(row, "campaignManager"),
         Brand: readField(row, "brand"),
@@ -3340,9 +3390,8 @@ function deriveProgramAndPrRows(options = {}) {
       });
     }
 
-    const prNumber = readField(row, "prNumber");
     if (prNumber && !prRows.has(prNumber)) {
-      const related = sourceRows.filter((item) => readField(item, "prNumber") === prNumber);
+      const amount = prGroupPrAmount[prNumber] || prGroupPoAmount[prNumber] || prGroupTotalValue[prNumber] || "";
       prRows.set(prNumber, {
         Source: "Derived PR",
         "PR Number": prNumber,
@@ -3355,7 +3404,7 @@ function deriveProgramAndPrRows(options = {}) {
         "Campaign Type": readField(row, "campaignType"),
         "Campaign Manager": readField(row, "campaignManager"),
         "Program Name": readField(row, "programName") || readField(row, "program"),
-        "PR Amount": String(sumValues(related, "prAmount") || sumValues(related, "poAmount") || sumValues(related, "totalValue") || ""),
+        "PR Amount": String(amount),
         Status: "Derived",
       });
     }
@@ -3444,13 +3493,43 @@ function buildReconciliationRows() {
 
 function matchMonitoringRows(agencyRows, thirdPartyRows, scheduleRows = []) {
   const anchors = [...agencyRows, ...thirdPartyRows, ...scheduleRows];
+  if (!anchors.length) return [];
+
+  const wildcards = [];
+  const normalSet = new Set();
+
+  anchors.forEach(row => {
+    const d = readField(row, "date");
+    const c = readField(row, "channel");
+    const p = readField(row, "program");
+
+    if (!d || !c || !p) {
+      wildcards.push({ d, c, p });
+    } else {
+      normalSet.add(`${d.toLowerCase()}|${c.toLowerCase()}|${p.toLowerCase()}`);
+    }
+  });
+
   return state.datasets.thirdPartyMonitoring.filter((monitoringRow) => {
-    return anchors.some((row) => {
-      const sameDate = !readField(row, "date") || !readField(monitoringRow, "date") || readField(row, "date") === readField(monitoringRow, "date");
-      const sameChannel = !readField(row, "channel") || !readField(monitoringRow, "channel") || readField(row, "channel") === readField(monitoringRow, "channel");
-      const sameProgram = !readField(row, "program") || !readField(monitoringRow, "program") || readField(row, "program") === readField(monitoringRow, "program");
-      return sameDate && sameChannel && sameProgram;
-    });
+    const md = readField(monitoringRow, "date");
+    const mc = readField(monitoringRow, "channel");
+    const mp = readField(monitoringRow, "program");
+
+    if (md && mc && mp) {
+      const key = `${md.toLowerCase()}|${mc.toLowerCase()}|${mp.toLowerCase()}`;
+      if (normalSet.has(key)) return true;
+    }
+
+    if (wildcards.length > 0) {
+      return wildcards.some(w => {
+        const sameDate = !w.d || !md || w.d === md;
+        const sameChannel = !w.c || !mc || w.c === mc;
+        const sameProgram = !w.p || !mp || w.p === mp;
+        return sameDate && sameChannel && sameProgram;
+      });
+    }
+
+    return false;
   });
 }
 
