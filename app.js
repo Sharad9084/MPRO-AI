@@ -734,10 +734,9 @@ async function loadState() {
   refreshMasterOptionsFromCases();
   refreshMasterOptionsFromDatasets();
 
-  // Lazily load data for active tab in background — non-blocking
-  // Full data loads when user clicks on each tab (see switchView)
+  // Load data for all tabs in background — non-blocking
   setTimeout(() => {
-    loadExtractedDataFromBackendToState(state.activeView).catch(() => {});
+    loadExtractedDataFromBackendToState(null).catch(() => {});
   }, 500);
 
 }
@@ -842,7 +841,6 @@ function bindEvents() {
   $("#collapse-filters").addEventListener("click", () => setFiltersCollapsed(true));
   $("#expand-filters").addEventListener("click", () => setFiltersCollapsed(false));
   $("#load-sample")?.addEventListener("click", loadSample);
-  $("#switch-campaign-btn").addEventListener("click", showExistingCases);
   $("#add-row").addEventListener("click", addRow);
   $("#column-settings").addEventListener("click", toggleColumnPanel);
   $("#export-csv").addEventListener("click", exportCsv);
@@ -987,7 +985,7 @@ async function handleSignin() {
   showApp();
 
   setTimeout(() => {
-    loadExtractedDataFromBackendToState(state.activeView).catch(() => {});
+    loadExtractedDataFromBackendToState(null).catch(() => {});
   }, 300);
 }
 
@@ -1237,7 +1235,7 @@ function loadCase(id) {
   toast("Reconciliation loaded.");
   
   // Trigger loading data from backend for the new active case
-  loadExtractedDataFromBackendToState(state.activeView).catch(() => {});
+  loadExtractedDataFromBackendToState(null).catch(() => {});
 }
 
 function hydrateCase(caseItem) {
@@ -4003,10 +4001,10 @@ const backendTotals = {};
 const backendLoaded = {};
 
 async function loadExtractedDataFromBackendToState(sourceType = null) {
-  // If no sourceType given, load only the currently active view
+  // If no sourceType given, load all database source types
   const targets = sourceType
     ? [sourceType]
-    : [state.activeView].filter(k => SOURCE_CONFIG[k]);
+    : ["po", "mediaSchedule", "agency", "thirdPartyInvoice", "thirdPartyMonitoring"];
 
   let anyLoaded = false;
   for (const key of targets) {
