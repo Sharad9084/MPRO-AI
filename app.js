@@ -1488,7 +1488,7 @@ async function extractPdfFiles(files, sourceHint = "", metadata = {}) {
 async function extractPdfFileViaApi(file, sourceKey, metadata = {}) {
   if (!EXTRACTOR_SOURCE_TYPES[sourceKey]) return { ok: false };
 
-  const defaultApiBase = "https://pdf-to-excel-5ota.onrender.com";
+  const defaultApiBase = "http://13.60.228.14:8000";
   const currentApiBase = localStorage.getItem("mpro.apiBase") || defaultApiBase || (IS_LOCAL_APP ? LOCAL_API_BASE : "");
   
   const urls = [];
