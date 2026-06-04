@@ -1405,34 +1405,80 @@ function rememberMasterOption(type, value) {
   const clean = String(value || "").trim();
   if (!clean) return;
   const current = new Set(state.masterOptions[type] || []);
-  current.add(clean);
-  state.masterOptions[type] = Array.from(current).sort((a, b) => a.localeCompare(b));
-  localStorage.setItem(STORAGE_KEYS.masterOptions, JSON.stringify(state.masterOptions));
+  if (!current.has(clean)) {
+    current.add(clean);
+    state.masterOptions[type] = Array.from(current).sort((a, b) => a.localeCompare(b));
+    localStorage.setItem(STORAGE_KEYS.masterOptions, JSON.stringify(state.masterOptions));
+  }
 }
 
 function refreshMasterOptionsFromDatasets() {
   const rows = combinedRows();
+  const agenciesSet = new Set(state.masterOptions.agencies || []);
+  const advertisersSet = new Set(state.masterOptions.advertisers || []);
+  let changed = false;
+
   rows.forEach((row) => {
     const agency = readField(row, "agency");
     const advertiser = readField(row, "advertiser");
-    if (agency) rememberMasterOption("agencies", agency);
-    if (advertiser) rememberMasterOption("advertisers", advertiser);
+    if (agency) {
+      const cleanAgency = String(agency).trim();
+      if (cleanAgency && !agenciesSet.has(cleanAgency)) {
+        agenciesSet.add(cleanAgency);
+        changed = true;
+      }
+    }
+    if (advertiser) {
+      const cleanAdvertiser = String(advertiser).trim();
+      if (cleanAdvertiser && !advertisersSet.has(cleanAdvertiser)) {
+        advertisersSet.add(cleanAdvertiser);
+        changed = true;
+      }
+    }
   });
+
+  if (changed) {
+    state.masterOptions.agencies = Array.from(agenciesSet).sort((a, b) => a.localeCompare(b));
+    state.masterOptions.advertisers = Array.from(advertisersSet).sort((a, b) => a.localeCompare(b));
+    localStorage.setItem(STORAGE_KEYS.masterOptions, JSON.stringify(state.masterOptions));
+  }
   renderMasterOptionDatalists();
 }
 
 function refreshMasterOptionsFromCases() {
+  const agenciesSet = new Set(state.masterOptions.agencies || []);
+  const advertisersSet = new Set(state.masterOptions.advertisers || []);
+  let changed = false;
+
   state.cases.forEach((caseItem) => {
     Object.entries(caseItem.datasets || {}).forEach(([sourceKey, rows]) => {
       if (sourceKey === "pr") return;
       (rows || []).forEach((row) => {
         const agency = readField(row, "agency");
         const advertiser = readField(row, "advertiser");
-        if (agency) rememberMasterOption("agencies", agency);
-        if (advertiser) rememberMasterOption("advertisers", advertiser);
+        if (agency) {
+          const cleanAgency = String(agency).trim();
+          if (cleanAgency && !agenciesSet.has(cleanAgency)) {
+            agenciesSet.add(cleanAgency);
+            changed = true;
+          }
+        }
+        if (advertiser) {
+          const cleanAdvertiser = String(advertiser).trim();
+          if (cleanAdvertiser && !advertisersSet.has(cleanAdvertiser)) {
+            advertisersSet.add(cleanAdvertiser);
+            changed = true;
+          }
+        }
       });
     });
   });
+
+  if (changed) {
+    state.masterOptions.agencies = Array.from(agenciesSet).sort((a, b) => a.localeCompare(b));
+    state.masterOptions.advertisers = Array.from(advertisersSet).sort((a, b) => a.localeCompare(b));
+    localStorage.setItem(STORAGE_KEYS.masterOptions, JSON.stringify(state.masterOptions));
+  }
 }
 
 function renderMasterOptionDatalists() {
