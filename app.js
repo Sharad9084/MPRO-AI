@@ -719,6 +719,13 @@ async function loadState() {
     }
   }
 
+  const TARGET_CAMPAIGN_ID = "e3ac65e8-3ab1-4bcf-80c2-c6603ab87716";
+  let targetCase = state.cases.find(c => c.id === TARGET_CAMPAIGN_ID);
+  if (targetCase) {
+    loadFromDraft = false;
+    latestDbCase = targetCase;
+  }
+
   if (!loadFromDraft) {
     if (latestDbCase) {
       state.activeCaseId = latestDbCase.id;
@@ -965,19 +972,19 @@ async function handleSignin() {
   localStorage.setItem(STORAGE_KEYS.session, JSON.stringify({ user: state.currentUser, token: result.data.token, expiresAt: Date.now() + duration }));
   state.cases = await loadCasesFromApi() || readJSON(STORAGE_KEYS.cases, []);
   
-  let activeCase = null;
-  state.activeCaseId = localStorage.getItem(STORAGE_KEYS.activeCase);
-  if (state.activeCaseId) {
+  const TARGET_CAMPAIGN_ID = "e3ac65e8-3ab1-4bcf-80c2-c6603ab87716";
+  let activeCase = state.cases.find(c => c.id === TARGET_CAMPAIGN_ID);
+  if (!activeCase && state.activeCaseId) {
     activeCase = state.cases.find(c => c.id === state.activeCaseId);
   }
   if (!activeCase && state.cases.length > 0) {
     const sortedCases = [...state.cases].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
     activeCase = sortedCases[0];
-    state.activeCaseId = activeCase.id;
-    localStorage.setItem(STORAGE_KEYS.activeCase, activeCase.id);
   }
   
   if (activeCase) {
+    state.activeCaseId = activeCase.id;
+    localStorage.setItem(STORAGE_KEYS.activeCase, activeCase.id);
     hydrateCase(activeCase);
     if ($("#campaign-name")) $("#campaign-name").value = activeCase.name;
   }
