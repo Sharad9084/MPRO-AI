@@ -17,6 +17,9 @@ const PDFJS_VERSION = "4.9.155";
 let pdfJsLoadPromise = null;
 const BACKEND_SOURCE_TYPES = ["po", "mediaSchedule", "agency", "thirdPartyInvoice", "thirdPartyMonitoring"];
 let backendWarmLoadTimer = null;
+let backendGridRenderTimer = null;
+const CROSS_REF_ENRICH_LIMIT = 5000;
+const QUALITY_ANNOTATION_LIMIT = 5000;
 
 // Caching variables for cross-reference enrichment speedup
 let cachedEnrichedRows = null;
@@ -2407,7 +2410,7 @@ function saveDraftState() {
     // localStorage quota exceeded — skip draft save silently
     console.warn("Draft state too large for localStorage, skipping:", e);
   }
-  debouncedSaveCase();
+  if (state.dirty) debouncedSaveCase();
 }
 
 async function clearAllData() {
@@ -2472,7 +2475,7 @@ function exportCsv() {
 }
 
 function renderAll() {
-  applyQualityAnnotations();
+  if (countRows(state.datasets) <= QUALITY_ANNOTATION_LIMIT) applyQualityAnnotations();
   renderTabs();
   renderSummary();
   renderGlobalFilters();
@@ -3233,14 +3236,18 @@ function getFilteredRows() {
     const currentLength = Object.values(state.datasets).reduce((sum, list) => sum + (list?.length || 0), 0);
     if (cachedSourceView !== state.activeView || cachedDatasetsLength !== currentLength || cachedDatasetsVersion !== datasetsVersion || !cachedEnrichedRows) {
       const activeRows = getActiveRows();
-      const crossRefIndex = buildCrossRefIndex();
-      const allCols = getActiveColumns(activeRows, { includeHidden: true });
-      cachedEnrichedRows = activeRows.map((row) => {
-        const { enrichedRow, crossFills } = enrichRow(row, state.activeView, crossRefIndex, allCols);
-        enrichedRow.__crossFills = crossFills;
-        enrichedRow.__originalRow = row;
-        return enrichedRow;
-      });
+      if (currentLength > CROSS_REF_ENRICH_LIMIT) {
+        cachedEnrichedRows = activeRows.map((row) => ({ ...row, __crossFills: {}, __originalRow: row }));
+      } else {
+        const crossRefIndex = buildCrossRefIndex();
+        const allCols = getActiveColumns(activeRows, { includeHidden: true });
+        cachedEnrichedRows = activeRows.map((row) => {
+          const { enrichedRow, crossFills } = enrichRow(row, state.activeView, crossRefIndex, allCols);
+          enrichedRow.__crossFills = crossFills;
+          enrichedRow.__originalRow = row;
+          return enrichedRow;
+        });
+      }
       cachedSourceView = state.activeView;
       cachedDatasetsLength = currentLength;
       cachedDatasetsVersion = datasetsVersion;
@@ -4151,7 +4158,7 @@ function scheduleRemainingBackendWarmLoad(activeSource) {
 async function loadBackendSourcesSequentially(sources) {
   for (const source of sources) {
     if (!hasCloudSession()) return;
-    await loadExtractedDataFromBackendToState(source);
+    await loadExtractedDataFromBackendToState(source, { render: false });
     await new Promise((resolve) => setTimeout(resolve, 120));
   }
 }
@@ -4177,7 +4184,7 @@ async function loadExtractedDataFromBackend(sourceType, offset = 0, limit = 200)
 const backendTotals = {};
 const backendLoaded = {};
 
-async function loadExtractedDataFromBackendToState(sourceType = null) {
+async function loadExtractedDataFromBackendToState(sourceType = null, options = {}) {
   // If no sourceType given, load all database source types
   const targets = sourceType
     ? [sourceType]
@@ -4205,10 +4212,19 @@ async function loadExtractedDataFromBackendToState(sourceType = null) {
       }
     }
   }
-  if (anyLoaded) {
+  if (anyLoaded && options.render !== false) {
     deriveProgramAndPrRows();
     renderAll();
   }
+}
+
+function scheduleActiveGridRender(sourceType, delay = 400) {
+  if (state.activeView !== sourceType) return;
+  clearTimeout(backendGridRenderTimer);
+  backendGridRenderTimer = setTimeout(() => {
+    cachedEnrichedRows = null;
+    renderGrid();
+  }, delay);
 }
 
 async function fetchRemainingDataInBackground(sourceType, offset, total) {
@@ -4217,15 +4233,12 @@ async function fetchRemainingDataInBackground(sourceType, offset, total) {
     const { rows } = await loadExtractedDataFromBackend(sourceType, offset, chunkSize);
     if (rows && rows.length > 0) {
       state.datasets[sourceType] = [...(state.datasets[sourceType] || []), ...rows];
-      if (state.activeView === sourceType) {
-        deriveProgramAndPrRows();
-        renderAll();
-      }
+      scheduleActiveGridRender(sourceType);
       const nextOffset = offset + rows.length;
       if (nextOffset < total) {
         setTimeout(() => {
           fetchRemainingDataInBackground(sourceType, nextOffset, total);
-        }, 100);
+        }, 600);
       }
     }
   } catch (err) {
