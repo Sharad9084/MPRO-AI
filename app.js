@@ -3918,7 +3918,11 @@ function moveColumn(source, target) {
 function readField(row, fieldKey) {
   const aliases = (FIELD_ALIASES[fieldKey] || [fieldKey]).map(normalizeKey);
   const matchedKey = Object.keys(row).find((key) => aliases.includes(normalizeKey(key)));
-  return matchedKey ? String(row[matchedKey] || "") : "";
+  const val = matchedKey ? String(row[matchedKey] || "") : "";
+  if (["agency", "advertiser", "vendor"].includes(fieldKey)) {
+    return normalizeEntityName(val, fieldKey);
+  }
+  return val;
 }
 
 function columnsFromRows(rows) {
@@ -4283,4 +4287,49 @@ function toast(message) {
   toastEl.classList.remove("hidden");
   clearTimeout(toastEl.timer);
   toastEl.timer = setTimeout(() => toastEl.classList.add("hidden"), 3600);
+}
+
+function normalizeEntityName(name, fieldKey) {
+  if (!name) return "";
+  let str = String(name).trim();
+  if (!str) return "";
+
+  // Standardise multiple white spaces
+  str = str.replace(/\s+/g, " ");
+
+  const lower = str.toLowerCase();
+
+  // 1. GroupM normalization
+  if (lower.includes("group m") || lower.includes("groupm")) {
+    return "GroupM";
+  }
+
+  // 2. Xiaomi normalization
+  if (lower.includes("xiaomi") || lower.includes("xiamo") || lower.includes("redmi")) {
+    return "Xiaomi";
+  }
+
+  // 3. Madison normalization
+  if (lower.includes("madison")) {
+    return "Madison";
+  }
+
+  // 4. North Star Media normalization
+  if (lower.includes("north star")) {
+    return "North Star Media";
+  }
+
+  // 5. Sun Network normalization
+  if (lower.includes("sun network") || lower.includes("sun tv") || lower.includes("sunnet")) {
+    return "Sun Network";
+  }
+
+  // Suffix removal rules for general cleanup:
+  // Strip common entity suffixes like Pvt Ltd, Pvt. Ltd., Private Limited, Ltd, Ltd., Technology India, Technology, India
+  let cleaned = str
+    .replace(/\b(Pvt\.?\s*Ltd\.?|Private\s+Limited|Ltd\.?|Technology\s+India|Technology|India)\b/ig, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned || str;
 }
