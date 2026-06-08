@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import os
 import sys
 import json
@@ -7,6 +8,11 @@ from pathlib import Path
 import requests
 from datetime import datetime
 
+# Fix encoding for Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 # Configuration
 ZIP_FOLDER = r"C:\Users\hp\Downloads\Sustenance_Redmi_Note_13_May24\Sustenance_Redmi_Note_13_May24"
 API_BASE = "https://mpro-ai.vercel.app"
@@ -14,7 +20,7 @@ API_EXTRACT = f"{API_BASE}/api/extract"
 
 # Source type mapping based on folder
 SOURCE_MAPPING = {
-    "Agency Invoices": "agency",
+    "Agency Invoices": "agency_invoice",
     "Broadcaster_Invoice": "broadcaster_invoice",
 }
 
@@ -50,7 +56,7 @@ def upload_pdf_to_api(file_path, source_type):
         filename = Path(file_path).name
         metadata = extract_metadata_from_filename(filename)
 
-        print(f"Processing: {filename} ({source_type})...", end=" ", flush=True)
+        print(f"[PROCESS] {filename} ({source_type})...", end=" ", flush=True)
 
         with open(file_path, 'rb') as f:
             files = {
@@ -67,7 +73,7 @@ def upload_pdf_to_api(file_path, source_type):
 
             if response.status_code == 200:
                 result = response.json()
-                print("✅ Extracted")
+                print("[OK] Extracted")
 
                 # Store extracted data
                 if source_type not in extracted_data:
@@ -78,18 +84,18 @@ def upload_pdf_to_api(file_path, source_type):
 
                 return True
             else:
-                print(f"❌ Error: {response.status_code}")
+                print(f"[ERROR] Status: {response.status_code}")
                 print(f"   Response: {response.text[:200]}")
                 return False
 
     except Exception as e:
-        print(f"❌ Exception: {str(e)[:100]}")
+        print(f"[ERROR] Exception: {str(e)[:100]}")
         return False
 
 def save_all_data_to_db():
     """Save all extracted data to database"""
     try:
-        print("\n📊 Saving to database...")
+        print("\n[INFO] Saving to database...")
 
         payload = {
             "datasets": extracted_data,
@@ -107,15 +113,15 @@ def save_all_data_to_db():
         )
 
         if response.status_code == 200:
-            print("✅ Data saved to database!")
+            print("[OK] Data saved to database!")
             return True
         else:
-            print(f"❌ Failed to save: {response.status_code}")
+            print(f"[ERROR] Failed to save: {response.status_code}")
             print(f"   Response: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Exception while saving: {str(e)}")
+        print(f"[ERROR] Exception while saving: {str(e)}")
         return False
 
 def process_all_pdfs():
@@ -129,10 +135,10 @@ def process_all_pdfs():
                 pdf_files.append(os.path.join(root, file))
 
     if not pdf_files:
-        print("❌ No PDF files found!")
+        print("[ERROR] No PDF files found!")
         return False
 
-    print(f"🔍 Found {len(pdf_files)} PDF files to process\n")
+    print(f"[INFO] Found {len(pdf_files)} PDF files to process\n")
 
     # Sort by folder then filename
     pdf_files.sort()
@@ -151,13 +157,13 @@ def process_all_pdfs():
 
         # Progress indicator
         if idx % 10 == 0:
-            print(f"\n[{idx}/{len(pdf_files)}] Processed so far: {success_count} ✅, {failed_count} ❌")
+            print(f"\n[{idx}/{len(pdf_files)}] Processed: {success_count} OK, {failed_count} FAILED")
 
     print(f"\n{'='*60}")
-    print(f"📈 Processing Complete!")
-    print(f"✅ Successful: {success_count}")
-    print(f"❌ Failed: {failed_count}")
-    print(f"📊 Total: {len(pdf_files)}")
+    print(f"[RESULT] Processing Complete!")
+    print(f"[OK] Successful: {success_count}")
+    print(f"[ERROR] Failed: {failed_count}")
+    print(f"[INFO] Total: {len(pdf_files)}")
     print(f"{'='*60}\n")
 
     # Save to database
@@ -167,10 +173,10 @@ def process_all_pdfs():
     return success_count > 0
 
 if __name__ == "__main__":
-    print("🚀 Starting batch PDF upload and extraction...")
-    print(f"📁 Folder: {ZIP_FOLDER}")
-    print(f"🌐 API: {API_EXTRACT}\n")
+    print("[START] Batch PDF upload and extraction...")
+    print(f"[FOLDER] {ZIP_FOLDER}")
+    print(f"[API] {API_EXTRACT}\n")
 
     process_all_pdfs()
 
-    print("✨ All done! Check your website to see the extracted data.")
+    print("[DONE] All complete! Check your website for extracted data.")

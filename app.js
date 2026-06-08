@@ -691,6 +691,8 @@ async function loadState() {
   state.globalFilters = keepKnownFilters(readJSON(STORAGE_KEYS.globalFilters, {}), GLOBAL_FILTERS);
   state.accountingFilters = keepKnownFilters(readJSON(STORAGE_KEYS.accountingFilters, {}), FILTER_DEFS.map((item) => item.key));
   state.masterOptions = { agencies: [], advertisers: [], ...readJSON(STORAGE_KEYS.masterOptions, {}) };
+  state.masterOptions.agencies = (state.masterOptions.agencies || []).filter(isValidOptionName);
+  state.masterOptions.advertisers = (state.masterOptions.advertisers || []).filter(isValidOptionName);
 
   const draftStr = localStorage.getItem("mpro.draft.state");
   let latestDbCase = null;
@@ -1356,9 +1358,6 @@ function validateUploadMetadata(sourceKey, files, metadata) {
   if (!sourceKey || !SOURCE_CONFIG[sourceKey]) return "Choose what type of data this PDF contains.";
   if (!files.length) return "Choose at least one PDF file.";
   if (files.some((file) => !/\.pdf$/i.test(file.name))) return "Only PDF files are supported here.";
-  if (!metadata.agency) return "Agency name is required.";
-  if (!metadata.medium) return "Medium is required.";
-  if (!metadata.advertiser) return "Advertiser name is required.";
   return "";
 }
 
@@ -1401,9 +1400,20 @@ function resetUnifiedUploadForm(options = {}) {
   renderMasterOptionDatalists();
 }
 
+function isValidOptionName(name) {
+  if (!name) return false;
+  const str = String(name).trim();
+  if (!str) return false;
+  if (/^\s*Page\s+\d+/i.test(str)) return false;
+  if (/^\s*Page\s*$/i.test(str)) return false;
+  if (str.toLowerCase().includes("invoice no") || str.toLowerCase().includes("station relation") || str.toLowerCase().includes("sales team")) return false;
+  if (str.length > 50) return false;
+  return true;
+}
+
 function rememberMasterOption(type, value) {
   const clean = String(value || "").trim();
-  if (!clean) return;
+  if (!clean || !isValidOptionName(clean)) return;
   const current = new Set(state.masterOptions[type] || []);
   if (!current.has(clean)) {
     current.add(clean);
@@ -1423,14 +1433,14 @@ function refreshMasterOptionsFromDatasets() {
     const advertiser = readField(row, "advertiser");
     if (agency) {
       const cleanAgency = String(agency).trim();
-      if (cleanAgency && !agenciesSet.has(cleanAgency)) {
+      if (cleanAgency && isValidOptionName(cleanAgency) && !agenciesSet.has(cleanAgency)) {
         agenciesSet.add(cleanAgency);
         changed = true;
       }
     }
     if (advertiser) {
       const cleanAdvertiser = String(advertiser).trim();
-      if (cleanAdvertiser && !advertisersSet.has(cleanAdvertiser)) {
+      if (cleanAdvertiser && isValidOptionName(cleanAdvertiser) && !advertisersSet.has(cleanAdvertiser)) {
         advertisersSet.add(cleanAdvertiser);
         changed = true;
       }
@@ -1458,14 +1468,14 @@ function refreshMasterOptionsFromCases() {
         const advertiser = readField(row, "advertiser");
         if (agency) {
           const cleanAgency = String(agency).trim();
-          if (cleanAgency && !agenciesSet.has(cleanAgency)) {
+          if (cleanAgency && isValidOptionName(cleanAgency) && !agenciesSet.has(cleanAgency)) {
             agenciesSet.add(cleanAgency);
             changed = true;
           }
         }
         if (advertiser) {
           const cleanAdvertiser = String(advertiser).trim();
-          if (cleanAdvertiser && !advertisersSet.has(cleanAdvertiser)) {
+          if (cleanAdvertiser && isValidOptionName(cleanAdvertiser) && !advertisersSet.has(cleanAdvertiser)) {
             advertisersSet.add(cleanAdvertiser);
             changed = true;
           }
@@ -1484,8 +1494,8 @@ function refreshMasterOptionsFromCases() {
 function renderMasterOptionDatalists() {
   const agencyList = $("#agency-options");
   const advertiserList = $("#advertiser-options");
-  if (agencyList) agencyList.innerHTML = (state.masterOptions.agencies || []).map((value) => `<option value="${escapeHTML(value)}"></option>`).join("");
-  if (advertiserList) advertiserList.innerHTML = (state.masterOptions.advertisers || []).map((value) => `<option value="${escapeHTML(value)}"></option>`).join("");
+  if (agencyList) agencyList.innerHTML = (state.masterOptions.agencies || []).filter(isValidOptionName).map((value) => `<option value="${escapeHTML(value)}"></option>`).join("");
+  if (advertiserList) advertiserList.innerHTML = (state.masterOptions.advertisers || []).filter(isValidOptionName).map((value) => `<option value="${escapeHTML(value)}"></option>`).join("");
 }
 
 async function parseFileForSource(file, sourceKey, metadata = {}) {
@@ -2722,7 +2732,10 @@ function renderGlobalFilters() {
   const rows = allRowsWithReconciliation();
   GLOBAL_FILTERS.forEach((key) => {
     const container = $(`[data-global-filter-control="${key}"]`);
-    const values = uniqueValues(rows.map((row) => readField(row, key))).filter(Boolean);
+    let values = uniqueValues(rows.map((row) => readField(row, key))).filter(Boolean);
+    if (["agency", "advertiser", "broadcaster"].includes(key)) {
+      values = values.filter(isValidOptionName);
+    }
     renderSearchableFilter(container, {
       key,
       label: FILTER_LABELS[key] || toTitle(key),
@@ -2751,7 +2764,10 @@ function renderAccountingFilters() {
   FILTER_DEFS.forEach((def) => {
     const wrapper = document.createElement("div");
     wrapper.className = "filter-control-shell side-filter-control";
-    const values = uniqueValues(rows.map((row) => readField(row, def.key))).filter(Boolean);
+    let values = uniqueValues(rows.map((row) => readField(row, def.key))).filter(Boolean);
+    if (["agency", "advertiser", "broadcaster"].includes(def.key)) {
+      values = values.filter(isValidOptionName);
+    }
     renderSearchableFilter(wrapper, {
       key: def.key,
       label: def.label,
