@@ -1,4 +1,3 @@
-import json
 import hashlib
 import hmac
 import os
@@ -6,7 +5,6 @@ import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -19,11 +17,8 @@ except ImportError as exc:
         "psycopg is required. Install it with: pip install -r backend\\requirements-postgres.txt"
     ) from exc
 
-
 ROOT = Path(__file__).resolve().parent
 SCHEMA_PATH = ROOT / "schema.postgres.sql"
-HOST = os.getenv("TAG_MPRO_API_HOST", os.getenv("MPRO_API_HOST", "127.0.0.1"))
-PORT = int(os.getenv("TAG_MPRO_API_PORT", os.getenv("MPRO_API_PORT", "8787")))
 
 
 def configured_database_url():
@@ -459,22 +454,6 @@ def ensure_postgres_columns(conn):
             conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {column_type}")
 
 
-def json_response(handler, status, payload):
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
-
-
-def read_body(handler):
-    length = int(handler.headers.get("Content-Length", "0"))
-    if not length:
-        return {}
-    return json.loads(handler.rfile.read(length).decode("utf-8"))
-
-
 def create_user(payload):
     username = (payload.get("username") or "").strip().lower()
     display_name = (payload.get("displayName") or payload.get("display_name") or "").strip()
@@ -794,76 +773,64 @@ def list_cases_for_user(user):
     return cases
 
 
-class Handler(BaseHTTPRequestHandler):
-    def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        super().end_headers()
-
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self.end_headers()
-
-    def do_GET(self):
-        path = urlparse(self.path).path
-        if path == "/api/health":
-            json_response(self, 200, {"ok": True, "database": "postgresql"})
-        elif path == "/api/cases":
-            user = require_user(self)
-            if not user:
-                json_response(self, 401, {"error": "Unauthorized"})
-                return
-            json_response(self, 200, {"cases": list_cases_for_user(user)})
+def get_extracted_data_by_source(source_type, user, case_id=None, limit=200, offset=0):
+    if source_type not in SOURCE_TABLES or not user:
+        return [], 0
+    table = SOURCE_TABLES[source_type]
+    with connect() as conn:
+        if case_id:
+            selected_case_id = conn.execute(
+                """
+                SELECT id FROM reconciliation_cases
+                WHERE id = %s AND (user_id = %s OR user_id IS NULL)
+                """,
+                (case_id, user["id"]),
+            ).fetchone()
         else:
-            json_response(self, 404, {"error": "Not found"})
-
-    def do_POST(self):
-        path = urlparse(self.path).path
-        if path == "/api/auth/signup":
-            try:
-                user = create_user(read_body(self))
-                json_response(self, 201, {"user": user})
-            except ValueError as exc:
-                json_response(self, 400, {"error": str(exc)})
-            except Exception:
-                json_response(self, 500, {"error": "Signup failed"})
-        elif path == "/api/auth/signin":
-            try:
-                session = authenticate_user(read_body(self))
-                json_response(self, 200, session)
-            except ValueError as exc:
-                json_response(self, 401, {"error": str(exc)})
-            except Exception:
-                json_response(self, 500, {"error": "Signin failed"})
-        elif path == "/api/auth/signout":
-            revoke_session(auth_header_token(self))
-            json_response(self, 200, {"ok": True})
-        elif path == "/api/cases":
-            user = require_user(self)
-            if not user:
-                json_response(self, 401, {"error": "Unauthorized"})
-                return
-            try:
-                case = upsert_case(read_body(self), user)
-                json_response(self, 200, {"case": case})
-            except ValueError as exc:
-                json_response(self, 403, {"error": str(exc)})
-            except Exception as exc:
-                json_response(self, 500, {"error": str(exc)})
-        else:
-            json_response(self, 404, {"error": "Not found"})
+            selected_case_id = conn.execute(
+                """
+                SELECT id FROM reconciliation_cases
+                WHERE user_id = %s OR user_id IS NULL
+                ORDER BY updated_at DESC LIMIT 1
+                """,
+                (user["id"],),
+            ).fetchone()
+        if not selected_case_id:
+            return [], 0
+        selected_case_id = selected_case_id["id"]
+        total = conn.execute(
+            f"SELECT COUNT(*) AS count FROM {table} WHERE case_id = %s",
+            (selected_case_id,),
+        ).fetchone()["count"]
+        rows = conn.execute(
+            f"SELECT raw_json FROM {table} WHERE case_id = %s LIMIT %s OFFSET %s",
+            (selected_case_id, limit, offset),
+        ).fetchall()
+    return [row["raw_json"] for row in rows], total
 
 
-if __name__ == "__main__":
-    try:
-        init_db()
-    except Exception as exc:
-        print("PostgreSQL API could not start.")
-        print("Check that PostgreSQL is running, the database exists, and DATABASE_URL has the correct password.")
-        print(f"Current DATABASE_URL: {DATABASE_URL}")
-        print(f"Error: {exc}")
-        raise SystemExit(1)
-    print(f"TAG-mPRO PostgreSQL API running at http://{HOST}:{PORT}")
-    print(f"Database URL: {DATABASE_URL}")
-    HTTPServer((HOST, PORT), Handler).serve_forever()
+def save_extracted_data(datasets, metadata, user):
+    case = {
+        "id": str(uuid.uuid4()),
+        "name": (metadata or {}).get("name") or "Extracted Data",
+        "datasets": datasets or {},
+        "activeView": "reconciliation",
+        "columnOrders": {},
+        "columnWidths": {},
+        "sort": {},
+    }
+    return upsert_case({"case": case}, user)
+
+
+def clear_extracted_data(user):
+    if not user:
+        return
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM reconciliation_cases WHERE user_id = %s AND name LIKE 'Extracted Data%'",
+            (user["id"],),
+        )
+
+
+# HTTP handlers live in api/. This module contains shared PostgreSQL operations.
+

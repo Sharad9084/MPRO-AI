@@ -1,17 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
-from api._common import core, ensure_db, options, require_database, send_json
-
-SOURCE_TABLES = {
-    "agency": "agency_invoice_records",
-    "thirdPartyInvoice": "third_party_invoice_records",
-    "thirdPartyMonitoring": "third_party_monitoring_records",
-    "po": "po_records",
-    "mediaSchedule": "media_schedule_records",
-    "program": "program_records",
-    "pr": "pr_records",
-}
+from api._common import core, options, read_json, require_database, send_json
 
 
 class handler(BaseHTTPRequestHandler):
@@ -34,9 +24,9 @@ class handler(BaseHTTPRequestHandler):
             if len(parts) >= 3:
                 source_type = parts[-1]
 
-        if not source_type or source_type not in SOURCE_TABLES:
+        if not source_type or source_type not in core.SOURCE_TABLES:
             send_json(self, 400, {
-                "error": f"Invalid source type '{source_type}'. Valid: {list(SOURCE_TABLES.keys())}"
+                "error": f"Invalid source type '{source_type}'. Valid: {list(core.SOURCE_TABLES.keys())}"
             })
             return
 
@@ -50,32 +40,12 @@ class handler(BaseHTTPRequestHandler):
 
         limit = max(1, min(limit, 2000))
 
-        table = SOURCE_TABLES[source_type]
-
-        if case_id:
-            where_clause = "WHERE case_id = %s"
-            count_params = (case_id,)
-            select_params = (case_id, limit, offset)
-        else:
-            where_clause = "WHERE case_id = (SELECT id FROM reconciliation_cases ORDER BY updated_at DESC LIMIT 1)"
-            count_params = ()
-            select_params = (limit, offset)
-
         try:
-            ensure_db()
-            with core.connect() as conn:
-                total_row = conn.execute(
-                    f"SELECT COUNT(*) AS cnt FROM {table} {where_clause}",
-                    count_params
-                ).fetchone()
-                total = total_row["cnt"] if total_row else 0
-
-                rows = conn.execute(
-                    f"SELECT raw_json FROM {table} {where_clause} ORDER BY id LIMIT %s OFFSET %s",
-                    select_params,
-                ).fetchall()
-
-            data = [r["raw_json"] for r in rows]
+            user = core.require_user(self)
+            if not user:
+                send_json(self, 401, {"error": "Unauthorized"})
+                return
+            data, total = core.get_extracted_data_by_source(source_type, user, case_id, limit, offset)
             send_json(self, 200, {
                 "data": data,
                 "sourceType": source_type,
@@ -83,5 +53,26 @@ class handler(BaseHTTPRequestHandler):
                 "limit": limit,
                 "offset": offset,
             })
+        except Exception as exc:
+            send_json(self, 500, {"error": str(exc)})
+
+    def do_POST(self):
+        if not require_database(self):
+            return
+        user = core.require_user(self)
+        if not user:
+            send_json(self, 401, {"error": "Unauthorized"})
+            return
+        action = urlparse(self.path).path.rstrip("/").rsplit("/", 1)[-1]
+        try:
+            if action == "save":
+                payload = read_json(self)
+                case = core.save_extracted_data(payload.get("datasets", {}), payload.get("metadata", {}), user)
+                send_json(self, 200, {"case": case})
+            elif action == "clear":
+                core.clear_extracted_data(user)
+                send_json(self, 200, {"ok": True})
+            else:
+                send_json(self, 404, {"error": "Not found"})
         except Exception as exc:
             send_json(self, 500, {"error": str(exc)})

@@ -9,9 +9,10 @@ const STORAGE_KEYS = {
 };
 
 const LOCAL_API_BASE = "http://127.0.0.1:8787";
-const configuredApiBase = window.TAG_MPRO_API_BASE || localStorage.getItem("mpro.apiBase") || "";
+const IS_DIRECT_FILE = window.location.protocol === "file:";
+const configuredApiBase = window.TAG_MPRO_API_BASE || (IS_DIRECT_FILE ? localStorage.getItem("mpro.apiBase") : "") || "";
 const IS_LOCAL_APP = ["", "localhost", "127.0.0.1"].includes(window.location.hostname);
-const API_BASE = configuredApiBase || (IS_LOCAL_APP ? LOCAL_API_BASE : "");
+const API_BASE = configuredApiBase || (IS_DIRECT_FILE ? LOCAL_API_BASE : "");
 let apiOnline = false;
 const PDFJS_VERSION = "4.9.155";
 let pdfJsLoadPromise = null;
@@ -4131,9 +4132,10 @@ function readJSON(key, fallback) {
 
 async function saveExtractedDataToBackend(datasets) {
   try {
+    const token = readJSON(STORAGE_KEYS.session, {})?.token;
     const response = await fetch(apiUrl("/api/extracted-data/save"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ datasets, metadata: { name: "Extracted PDF Data" } }),
     });
     if (!response.ok) {
@@ -4184,9 +4186,10 @@ async function loadBackendSourcesSequentially(sources) {
 }
 async function loadExtractedDataFromBackend(sourceType, offset = 0, limit = 200) {
   try {
+    const token = readJSON(STORAGE_KEYS.session, {})?.token;
     const caseParam = state.activeCaseId ? `&case_id=${encodeURIComponent(state.activeCaseId)}` : "";
     const url = apiUrl(`/api/extracted-data/${sourceType}?limit=${limit}&offset=${offset}${caseParam}&_t=${Date.now()}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     if (!response.ok) return { rows: [], total: 0, ok: false };
     const result = await response.json();
     const rawRows = result.data || [];
@@ -4268,7 +4271,11 @@ async function fetchRemainingDataInBackground(sourceType, offset, total) {
 
 async function clearExtractedDataFromBackend() {
   try {
-    const response = await fetch(apiUrl("/api/extracted-data/clear"), { method: "POST" });
+    const token = readJSON(STORAGE_KEYS.session, {})?.token;
+    const response = await fetch(apiUrl("/api/extracted-data/clear"), {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!response.ok) {
       const error = await response.json();
       console.error("Failed to clear data:", error);

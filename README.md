@@ -49,7 +49,7 @@ Create a PostgreSQL database named `mpro_reconciliation`, then set your connecti
 
 ```powershell
 $env:DATABASE_URL="postgresql://postgres:your_password@localhost:5432/mpro_reconciliation"
-python backend\server_postgres.py
+python -m api.server
 ```
 
 PostgreSQL uses the same frontend and same API URL:
@@ -58,7 +58,36 @@ PostgreSQL uses the same frontend and same API URL:
 http://127.0.0.1:8787
 ```
 
-So after `server_postgres.py` is running, open `index.html` exactly like before.
+After the API server starts, open `index.html` exactly like before.
+
+## Docker Compose Deployment
+
+Docker Compose runs the static frontend, nginx reverse proxy, Python PostgreSQL API/PDF extractor, and PostgreSQL database. PostgreSQL data is stored in the named `postgres_data` volume. The persistent Python server exposes the same extraction and extracted-data routes used by the Vercel Functions.
+
+Set deployment secrets before starting (PowerShell example):
+
+```powershell
+$env:POSTGRES_PASSWORD="replace-with-a-strong-password"
+$env:APP_PORT="8080"
+docker compose up -d --build
+```
+
+Open `http://localhost:8080`. Verify the stack with:
+
+```powershell
+docker compose ps
+curl.exe http://localhost:8080/api/health
+```
+
+Opening `index.html` directly also works: Compose exposes the API on `127.0.0.1:8787` for direct-file mode. Set `DIRECT_API_PORT` before startup if that host port is already in use.
+
+Stop containers without deleting database data:
+
+```powershell
+docker compose down
+```
+
+For production, always replace the default `POSTGRES_PASSWORD`. If the password contains URL-reserved characters, URL-encode them because the app receives it in `DATABASE_URL`.
 
 ## Vercel Backend Mode
 

@@ -56,7 +56,7 @@ Set connection string and run:
 
 ```powershell
 $env:DATABASE_URL="postgresql://postgres:your_password@localhost:5432/mpro_reconciliation"
-python backend\server_postgres.py
+python -m api.server
 ```
 
 PostgreSQL schema:
